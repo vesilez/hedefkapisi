@@ -1,14 +1,9 @@
 import type { SupportType } from "@/constants/support-types";
+import type { SupportRequestStatus } from "@/constants/support-request-statuses";
 import type { BaseEntity, EntityId, ISODateString, Nullable } from "./common";
 
-export const SUPPORT_REQUEST_STATUSES = [
-  "pending",
-  "approved",
-  "rejected",
-  "matched",
-  "cancelled",
-] as const;
-export type SupportRequestStatus = (typeof SUPPORT_REQUEST_STATUSES)[number];
+export type { SupportRequestStatus } from "@/constants/support-request-statuses";
+export { SUPPORT_REQUEST_STATUSES } from "@/constants/support-request-statuses";
 
 export interface SupportRequest extends BaseEntity {
   ideaId: EntityId;
@@ -23,7 +18,6 @@ export interface SupportRequest extends BaseEntity {
 
 export interface CreateSupportRequestInput {
   ideaId: EntityId;
-  supporterId: EntityId;
   supportTypes: SupportType[];
   message: string;
 }

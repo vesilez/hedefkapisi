@@ -16,7 +16,10 @@ export const createSupportRequestSchema = z.object({
     .max(4, "En fazla 4 destek türü seçebilirsiniz.")
     .refine(uniqueValues, "Destek türleri tekrar eden değer içeremez.")
     .refine(
-      (values) => values.every((value) => SUPPORT_TYPE_MVP_ENABLED[value]),
+      (values) =>
+        values.every(
+          (value) => value !== "financial" && SUPPORT_TYPE_MVP_ENABLED[value],
+        ),
       "Finansal destek MVP sürümünde kullanılamaz.",
     ),
   message: z

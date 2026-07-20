@@ -1,6 +1,6 @@
 import "client-only";
 
-import { USER_ROLES } from "@/constants/roles";
+import { isUserRole, USER_ROLES, type UserRole } from "@/constants/roles";
 import { SUPPORT_TYPES } from "@/constants/support-types";
 import { USER_STATUSES } from "@/constants/user-statuses";
 import { db } from "@/lib/firebase/firestore";
@@ -9,24 +9,48 @@ import {
   getFirebaseErrorMessage,
 } from "@/lib/firebase/firebase-error";
 import type { ProfileFormValues } from "@/lib/validations/profile-form-schema";
+import { isPublicRegisterRole } from "@/lib/validations/auth-schema";
+import { supporterProfileSchema } from "@/lib/validations/user-schema";
 import {
   GUARDIAN_APPROVAL_STATUSES,
   MENTOR_PROFILE_STATUSES,
   SCHOOL_TYPES,
   SUPPORTER_TYPES,
   type UserWithProfiles,
+  type CreateUserDocumentInput,
+  type UpdateUserProfileInput,
 } from "@/types/user";
-import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
+import {
+  type DocumentData,
+  type DocumentSnapshot,
+  doc,
+  getDoc,
+  getDocFromServer,
+  onSnapshot,
+  serverTimestamp,
+  setDoc,
+  type Unsubscribe,
+} from "firebase/firestore";
 import { z } from "zod";
 
-export type UserServiceResult<T> =
-  | { success: true; data: T }
-  | { success: false; error: { code: string; message: string } };
+type UserServiceFailure = {
+  success: false;
+  error: { code: string; message: string };
+};
 
-export interface SaveUserProfileInput extends ProfileFormValues {
-  emailVerified: boolean;
-  avatarUrl: string | null;
+export type UserServiceResult<T> = { success: true; data: T } | UserServiceFailure;
+
+export type SaveUserProfileInput = ProfileFormValues &
+  Pick<UpdateUserProfileInput, "emailVerified" | "avatarUrl">;
+
+export interface UserAccessProfile {
+  id: string;
+  role: UserRole;
 }
+
+export type UserAccessProfileListener = (
+  result: UserServiceResult<UserAccessProfile | null>,
+) => void;
 
 const firestoreTimestampSchema = z.unknown().transform((value, context) => {
   if (
@@ -72,7 +96,9 @@ const userProfileDocumentSchema = z.object({
       guardianApprovalStatus: z.enum(GUARDIAN_APPROVAL_STATUSES),
       bio: nullableTextSchema,
     })
-    .nullable(),
+    .nullable()
+    .optional()
+    .default(null),
   supporterProfile: z
     .object({
       userId: z.string(),
@@ -86,7 +112,9 @@ const userProfileDocumentSchema = z.object({
       linkedin: nullableTextSchema,
       status: z.enum(USER_STATUSES),
     })
-    .nullable(),
+    .nullable()
+    .optional()
+    .default(null),
   mentorProfile: z
     .object({
       userId: z.string(),
@@ -98,10 +126,12 @@ const userProfileDocumentSchema = z.object({
       website: nullableTextSchema,
       status: z.enum(MENTOR_PROFILE_STATUSES),
     })
-    .nullable(),
+    .nullable()
+    .optional()
+    .default(null),
 });
 
-function failure<T>(error: unknown): UserServiceResult<T> {
+function failure(error: unknown): UserServiceFailure {
   return {
     success: false,
     error: {
@@ -109,6 +139,82 @@ function failure<T>(error: unknown): UserServiceResult<T> {
       message: getFirebaseErrorMessage(error),
     },
   };
+}
+
+function logAccessSnapshot(
+  userId: string,
+  snapshot: DocumentSnapshot<DocumentData>,
+): void {
+  if (process.env.NODE_ENV !== "development") return;
+
+  const role: unknown = snapshot.exists() ? snapshot.data().role : undefined;
+  console.info("[admin-access] auth uid present:", userId.length > 0);
+  console.info("[admin-access] profile document found:", snapshot.exists());
+  console.info(
+    "[admin-access] profile role:",
+    typeof role === "string" ? role : "invalid",
+  );
+}
+
+function mapUserAccessSnapshot(
+  snapshot: DocumentSnapshot<DocumentData>,
+): UserServiceResult<UserAccessProfile | null> {
+  if (!snapshot.exists()) return { success: true, data: null };
+
+  const rawRole: unknown = snapshot.data().role;
+  const role: unknown =
+    typeof rawRole === "string" ? rawRole.trim().toLowerCase() : rawRole;
+  if (!isUserRole(role)) {
+    return {
+      success: false,
+      error: {
+        code: "firestore/invalid-user-role",
+        message: "Profil rolü okunamadı. Lütfen daha sonra tekrar deneyin.",
+      },
+    };
+  }
+
+  return { success: true, data: { id: snapshot.id, role } };
+}
+
+export async function createUserDocument(
+  input: CreateUserDocumentInput,
+): Promise<UserServiceResult<void>> {
+  if (!isPublicRegisterRole(input.role)) {
+    return {
+      success: false,
+      error: {
+        code: "user/invalid-role",
+        message: "Bu kullanıcı rolüyle herkese açık kayıt yapılamaz.",
+      },
+    };
+  }
+
+  try {
+    await setDoc(
+      doc(db, "users", input.uid),
+      {
+        id: input.uid,
+        role: input.role,
+        name: input.name,
+        surname: input.surname,
+        email: input.email,
+        phone: "",
+        city: "",
+        status: "active",
+        profileCompleted: false,
+        emailVerified: input.emailVerified,
+        avatarUrl: null,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      },
+      { merge: false },
+    );
+
+    return { success: true, data: undefined };
+  } catch (error: unknown) {
+    return failure(error);
+  }
 }
 
 export async function getUserProfile(
@@ -136,7 +242,54 @@ export async function getUserProfile(
   }
 }
 
-export async function createOrUpdateUserProfile(
+export async function getUserAccessProfile(
+  userId: string,
+): Promise<UserServiceResult<UserAccessProfile | null>> {
+  try {
+    const snapshot = await getDoc(doc(db, "users", userId));
+    logAccessSnapshot(userId, snapshot);
+    return mapUserAccessSnapshot(snapshot);
+  } catch (error: unknown) {
+    const result = failure(error);
+    if (process.env.NODE_ENV === "development") {
+      console.error(
+        "[admin-access] profile load error:",
+        result.error.code,
+        result.error.message,
+      );
+    }
+    return result;
+  }
+}
+
+export function subscribeToUserAccessProfile(
+  userId: string,
+  listener: UserAccessProfileListener,
+): Unsubscribe {
+  return onSnapshot(
+    doc(db, "users", userId),
+    { includeMetadataChanges: true },
+    (snapshot) => {
+      // Yetki kararında kalıcı/yerel cache yerine Firestore sunucu verisini kullan.
+      if (snapshot.metadata.fromCache) return;
+      logAccessSnapshot(userId, snapshot);
+      listener(mapUserAccessSnapshot(snapshot));
+    },
+    (error: unknown) => {
+      const result = failure(error);
+      if (process.env.NODE_ENV === "development") {
+        console.error(
+          "[admin-access] profile load error:",
+          result.error.code,
+          result.error.message,
+        );
+      }
+      listener(result);
+    },
+  );
+}
+
+export async function updateUserProfile(
   userId: string,
   input: SaveUserProfileInput,
 ): Promise<UserServiceResult<void>> {
@@ -144,16 +297,67 @@ export async function createOrUpdateUserProfile(
 
   try {
     const existing = await getDoc(userReference);
+    if (!existing.exists()) {
+      return {
+        success: false,
+        error: {
+          code: "firestore/user-profile-not-found",
+          message:
+            "Profil kaydınız bulunamadı. Lütfen daha sonra tekrar deneyin.",
+        },
+      };
+    }
+
+    const existingRole = existing.data().role;
+    if (!isPublicRegisterRole(existingRole) || existingRole !== input.role) {
+      return {
+        success: false,
+        error: {
+          code: "user/role-change-not-allowed",
+          message: "Kullanıcı rolü profil sayfasından değiştirilemez.",
+        },
+      };
+    }
+
+    const supporterProfile =
+      existingRole === "supporter"
+        ? supporterProfileSchema.safeParse({
+            userId,
+            supporterType: input.supporterType,
+            organizationName: input.organizationName || null,
+            title: input.title || null,
+            expertiseAreas: input.expertiseAreas,
+            supportTypes: input.supportTypes,
+            bio: input.bio || null,
+            website: input.website || null,
+            linkedin: input.linkedin || null,
+            status: "active",
+          })
+        : null;
+
+    if (supporterProfile && !supporterProfile.success) {
+      return {
+        success: false,
+        error: {
+          code: "user/invalid-supporter-profile",
+          message:
+            supporterProfile.error.issues[0]?.message ??
+            "Destekçi profil bilgileri geçersiz.",
+        },
+      };
+    }
+
     const commonData = {
       id: userId,
-      role: input.role,
+      role: existingRole,
       name: input.name,
       surname: input.surname,
       email: input.email,
       phone: input.phone || null,
       city: input.city,
       status: "active" as const,
-      profileCompleted: true,
+      // Destekçi profilinde nested veri sunucudan doğrulanana kadar false kalır.
+      profileCompleted: existingRole === "supporter" ? false : true,
       emailVerified: input.emailVerified,
       avatarUrl: input.avatarUrl,
       updatedAt: serverTimestamp(),
@@ -161,7 +365,7 @@ export async function createOrUpdateUserProfile(
 
     const roleProfiles = {
       studentProfile:
-        input.role === "student"
+        existingRole === "student"
           ? {
               userId,
               schoolType: input.schoolType ?? "other",
@@ -177,22 +381,11 @@ export async function createOrUpdateUserProfile(
             }
           : null,
       supporterProfile:
-        input.role === "supporter"
-          ? {
-              userId,
-              supporterType: input.supporterType ?? "other",
-              organizationName: input.organizationName || null,
-              title: input.title || null,
-              expertiseAreas: input.expertiseAreas,
-              supportTypes: input.supportTypes,
-              bio: input.bio || null,
-              website: input.website || null,
-              linkedin: input.linkedin || null,
-              status: "active" as const,
-            }
+        existingRole === "supporter"
+          ? supporterProfile?.data
           : null,
       mentorProfile:
-        input.role === "mentor"
+        existingRole === "mentor"
           ? {
               userId,
               expertiseAreas: input.expertiseAreas,
@@ -211,16 +404,60 @@ export async function createOrUpdateUserProfile(
       {
         ...commonData,
         ...roleProfiles,
-        ...(existing.exists() ? {} : { createdAt: serverTimestamp() }),
       },
       { merge: true },
     );
+
+    const savedProfile = await getDocFromServer(userReference);
+    if (
+      !savedProfile.exists() ||
+      (existingRole === "supporter" &&
+        savedProfile.data().supporterProfile == null)
+    ) {
+      return {
+        success: false,
+        error: {
+          code: "firestore/profile-write-not-confirmed",
+          message:
+            "Profil bilgileri kaydedilemedi. Lütfen tekrar deneyin.",
+        },
+      };
+    }
+
+    if (existingRole === "supporter") {
+      await setDoc(
+        userReference,
+        {
+          profileCompleted: true,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+
+      const completedProfile = await getDocFromServer(userReference);
+      if (
+        !completedProfile.exists() ||
+        completedProfile.data().profileCompleted !== true ||
+        completedProfile.data().supporterProfile == null
+      ) {
+        return {
+          success: false,
+          error: {
+            code: "firestore/profile-completion-not-confirmed",
+            message:
+              "Destekçi profili tamamlanamadı. Lütfen tekrar deneyin.",
+          },
+        };
+      }
+    }
 
     return { success: true, data: undefined };
   } catch (error: unknown) {
     return failure(error);
   }
 }
+
+export const createOrUpdateUserProfile = updateUserProfile;
 
 export async function isUserProfileCompleted(
   userId: string,

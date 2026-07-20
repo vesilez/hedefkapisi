@@ -54,6 +54,26 @@ export interface BaseUser {
   updatedAt: ISODateString;
 }
 
+export interface CreateUserDocumentInput {
+  uid: EntityId;
+  role: "student" | "supporter" | "mentor";
+  name: string;
+  surname: string;
+  email: string;
+  emailVerified: boolean;
+}
+
+export interface UpdateUserProfileInput {
+  role: "student" | "supporter" | "mentor";
+  name: string;
+  surname: string;
+  email: string;
+  phone?: string;
+  city: string;
+  emailVerified: boolean;
+  avatarUrl: Nullable<string>;
+}
+
 export interface StudentProfile {
   userId: EntityId;
   schoolType: SchoolType;

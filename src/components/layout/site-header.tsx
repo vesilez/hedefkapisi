@@ -2,6 +2,7 @@
 
 import { useAuth } from "@/hooks/use-auth";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Menu } from "lucide-react";
 import { useState } from "react";
 import { mainNavigation } from "@/config/navigation";
@@ -9,13 +10,15 @@ import { siteConfig } from "@/config/site";
 import { PageContainer } from "./page-container";
 
 export function SiteHeader() {
+  const router = useRouter();
   const { user, loading, logout } = useAuth();
   const [loggingOut, setLoggingOut] = useState(false);
 
   async function handleLogout() {
     if (loggingOut) return;
     setLoggingOut(true);
-    await logout();
+    const result = await logout();
+    if (result.success) router.push("/");
     setLoggingOut(false);
   }
 

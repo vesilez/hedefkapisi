@@ -15,6 +15,7 @@ import type {
   RegisterInput,
   ResetPasswordInput,
 } from "@/types/auth";
+import { createUserDocument } from "@/services/user-service";
 import {
   createUserWithEmailAndPassword,
   sendEmailVerification,
@@ -76,7 +77,7 @@ export async function registerWithEmailAndPassword(
   }
 
   try {
-    const { email, password, name, surname } = validation.data;
+    const { email, password, name, surname, role } = validation.data;
     const credential = await createUserWithEmailAndPassword(
       auth,
       email,
@@ -86,6 +87,27 @@ export async function registerWithEmailAndPassword(
     await updateProfile(credential.user, {
       displayName: `${name} ${surname}`,
     });
+
+    const userDocumentResult = await createUserDocument({
+      uid: credential.user.uid,
+      role,
+      name,
+      surname,
+      email: credential.user.email ?? email,
+      emailVerified: credential.user.emailVerified,
+    });
+
+    if (!userDocumentResult.success) {
+      return {
+        success: false,
+        error: {
+          code: "auth/user-document-creation-failed",
+          message:
+            "Hesabınız oluşturulmuş olabilir ancak kullanıcı kaydınız tamamlanamadı. Lütfen işlemi tekrar deneyin.",
+        },
+      };
+    }
+
     await sendEmailVerification(credential.user);
 
     return {

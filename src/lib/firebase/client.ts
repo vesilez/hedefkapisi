@@ -1,5 +1,3 @@
-import "client-only";
-
 import { getFirebaseEnv } from "@/config/env";
 import { getApp, getApps, initializeApp } from "firebase/app";
 

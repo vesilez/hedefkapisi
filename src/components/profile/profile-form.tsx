@@ -9,17 +9,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { USER_ROLE_LABELS } from "@/constants/roles";
 import { SUPPORT_TYPES, SUPPORT_TYPE_LABELS } from "@/constants/support-types";
 import { useAuth } from "@/hooks/use-auth";
-import { PUBLIC_REGISTER_ROLES } from "@/lib/validations/auth-schema";
 import {
   isProfileRole,
   profileFormSchema,
   type ProfileFormInput,
   type ProfileFormValues,
 } from "@/lib/validations/profile-form-schema";
-import {
-  createOrUpdateUserProfile,
-  getUserProfile,
-} from "@/services/user-service";
+import { getUserProfile, updateUserProfile } from "@/services/user-service";
 import {
   SCHOOL_TYPES,
   SUPPORTER_TYPES,
@@ -29,7 +25,12 @@ import { CheckCircle2, LoaderCircle } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Controller, useForm, useWatch } from "react-hook-form";
+import {
+  Controller,
+  type FieldErrors,
+  useForm,
+  useWatch,
+} from "react-hook-form";
 
 const SCHOOL_TYPE_LABELS = {
   high_school: "Lise",
@@ -46,6 +47,36 @@ const SUPPORTER_TYPE_LABELS = {
   university: "Üniversite",
   other: "Diğer",
 } as const;
+
+const PROFILE_FIELD_LABELS: Partial<Record<keyof ProfileFormInput, string>> = {
+  name: "Ad",
+  surname: "Soyad",
+  email: "E-posta",
+  phone: "Telefon",
+  city: "Şehir",
+  bio: "Kısa biyografi",
+  supporterType: "Destekçi türü",
+  organizationName: "Kurum adı",
+  title: "Ünvan",
+  expertiseAreas: "Uzmanlık alanları",
+  supportTypes: "Destek türleri",
+  website: "Website",
+  linkedin: "LinkedIn",
+};
+
+function visibleValidationErrors(errors: FieldErrors<ProfileFormInput>) {
+  return Object.entries(errors).flatMap(([field, error]) => {
+    if (
+      typeof error !== "object" ||
+      error === null ||
+      !("message" in error) ||
+      typeof error.message !== "string"
+    ) {
+      return [];
+    }
+    return [{ field, message: error.message }];
+  });
+}
 
 function emptyValues(
   email: string,
@@ -128,6 +159,7 @@ export function ProfileForm() {
   const router = useRouter();
   const { user, loading } = useAuth();
   const [profileLoading, setProfileLoading] = useState(true);
+  const [profileAvailable, setProfileAvailable] = useState(false);
   const [feedback, setFeedback] = useState<{
     type: "success" | "error";
     message: string;
@@ -161,7 +193,8 @@ export function ProfileForm() {
       } else if (result.data) {
         const values = valuesFromProfile(result.data);
         if (values) {
-          reset(values);
+          reset({ ...values, email: user.email ?? values.email });
+          setProfileAvailable(true);
         } else {
           setFeedback({
             type: "error",
@@ -169,7 +202,11 @@ export function ProfileForm() {
           });
         }
       } else {
-        reset(emptyValues(user.email ?? "", user.displayName));
+        setFeedback({
+          type: "error",
+          message:
+            "Profil kaydınız bulunamadı. Lütfen daha sonra tekrar deneyin.",
+        });
       }
 
       setProfileLoading(false);
@@ -180,23 +217,51 @@ export function ProfileForm() {
     };
   }, [loading, reset, router, user]);
 
-  const onSubmit = handleSubmit(async (values) => {
-    if (!user) return;
+  const onSubmit = handleSubmit(
+    async (values) => {
+      if (!user) return;
 
-    setFeedback(null);
-    const result = await createOrUpdateUserProfile(user.id, {
-      ...values,
-      email: user.email ?? values.email,
-      emailVerified: user.emailVerified,
-      avatarUrl: user.photoURL,
-    });
+      if (process.env.NODE_ENV === "development") {
+        console.info("[profile-submit] valid submit:", {
+          role: values.role,
+          supporterTypePresent: Boolean(values.supporterType),
+          expertiseAreaCount: values.expertiseAreas.length,
+          supportTypeCount: values.supportTypes.length,
+        });
+      }
 
-    setFeedback(
-      result.success
-        ? { type: "success", message: "Profilin başarıyla kaydedildi." }
-        : { type: "error", message: result.error.message },
-    );
-  });
+      setFeedback(null);
+      const result = await updateUserProfile(user.id, {
+        ...values,
+        email: user.email ?? values.email,
+        emailVerified: user.emailVerified,
+        avatarUrl: user.photoURL,
+      });
+
+      setFeedback(
+        result.success
+          ? { type: "success", message: "Profilin başarıyla kaydedildi." }
+          : { type: "error", message: result.error.message },
+      );
+    },
+    (validationErrors) => {
+      const visibleErrors = visibleValidationErrors(validationErrors);
+      if (process.env.NODE_ENV === "development") {
+        console.warn("[profile-submit] validation blocked submit:",
+          visibleErrors.map((error) => ({
+            field: error.field,
+            message: error.message,
+          })),
+        );
+      }
+      setFeedback({
+        type: "error",
+        message: visibleErrors[0]?.message
+          ? `Profil kaydedilemedi: ${visibleErrors[0].message}`
+          : "Profil kaydedilemedi. Lütfen işaretli alanları kontrol edin.",
+      });
+    },
+  );
 
   if (loading || profileLoading) {
     return (
@@ -211,6 +276,18 @@ export function ProfileForm() {
   }
 
   if (!user) return null;
+
+  if (!profileAvailable) {
+    return (
+      <Card className="mx-auto max-w-3xl" aria-live="polite">
+        <p role="alert" className="text-red-800">
+          {feedback?.message ?? "Profil bilgileri yüklenemedi."}
+        </p>
+      </Card>
+    );
+  }
+
+  const validationErrors = visibleValidationErrors(errors);
 
   return (
     <Card className="p-5 sm:p-8">
@@ -240,6 +317,25 @@ export function ProfileForm() {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {validationErrors.length > 0 && (
+        <div
+          className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-red-800"
+          role="alert"
+          aria-live="assertive"
+        >
+          <p className="font-semibold">Lütfen şu alanları kontrol edin:</p>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
+            {validationErrors.map((error) => (
+              <li key={error.field}>
+                {PROFILE_FIELD_LABELS[error.field as keyof ProfileFormInput] ??
+                  error.field}
+                : {error.message}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
@@ -350,18 +446,19 @@ export function ProfileForm() {
           </div>
           <div>
             <label
-              htmlFor="role"
+              htmlFor="role-display"
               className="text-sm font-semibold text-slate-800"
             >
               Rol
             </label>
-            <Select id="role" className="mt-2" {...register("role")}>
-              {PUBLIC_REGISTER_ROLES.map((profileRole) => (
-                <option key={profileRole} value={profileRole}>
-                  {USER_ROLE_LABELS[profileRole]}
-                </option>
-              ))}
-            </Select>
+            <input type="hidden" {...register("role")} />
+            <Input
+              id="role-display"
+              className="mt-2 bg-slate-100"
+              readOnly
+              aria-readonly="true"
+              value={USER_ROLE_LABELS[role]}
+            />
           </div>
         </div>
 
@@ -544,8 +641,22 @@ export function ProfileForm() {
                     <Input
                       id="organizationName"
                       className="mt-2"
+                      aria-invalid={Boolean(errors.organizationName)}
+                      aria-describedby={
+                        errors.organizationName
+                          ? "organization-name-error"
+                          : undefined
+                      }
                       {...register("organizationName")}
                     />
+                    {errors.organizationName && (
+                      <p
+                        id="organization-name-error"
+                        className="mt-1 text-sm text-red-700"
+                      >
+                        {errors.organizationName.message}
+                      </p>
+                    )}
                   </div>
                 </>
               )}
@@ -571,7 +682,18 @@ export function ProfileForm() {
                 >
                   Ünvan
                 </label>
-                <Input id="title" className="mt-2" {...register("title")} />
+                <Input
+                  id="title"
+                  className="mt-2"
+                  aria-invalid={Boolean(errors.title)}
+                  aria-describedby={errors.title ? "title-error" : undefined}
+                  {...register("title")}
+                />
+                {errors.title && (
+                  <p id="title-error" className="mt-1 text-sm text-red-700">
+                    {errors.title.message}
+                  </p>
+                )}
               </div>
               <div>
                 <label
@@ -686,6 +808,11 @@ export function ProfileForm() {
                     </label>
                   ))}
                 </div>
+                {errors.supportTypes && (
+                  <p className="mt-2 text-sm text-red-700" role="alert">
+                    {errors.supportTypes.message}
+                  </p>
+                )}
               </fieldset>
             )}
           </section>

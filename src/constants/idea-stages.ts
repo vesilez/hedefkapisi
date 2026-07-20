@@ -24,6 +24,18 @@ export const IDEA_STAGE_LABELS = {
   completed: "Tamamlandı",
 } as const satisfies Record<IdeaStage, string>;
 
+export const IDEA_STAGE_DESCRIPTIONS = {
+  dream: "Henüz şekillenmekte olan bir hayal.",
+  idea: "Temel yaklaşımı belirlenmiş bir fikir.",
+  research: "İhtiyaç ve uygulanabilirlik araştırılıyor.",
+  prototype: "İlk çalışan örnek geliştiriliyor.",
+  team_building: "Fikri geliştirecek ekip kuruluyor.",
+  support_needed: "İlerlemek için destek aranıyor.",
+  implemented: "Fikir uygulanmış ve kullanılmaya başlanmış.",
+  startup: "Girişim modeline dönüşmüş bir çalışma.",
+  completed: "Hedeflenen çalışma tamamlanmış.",
+} as const satisfies Record<IdeaStage, string>;
+
 export const IDEA_STAGE_ORDER = {
   dream: 1,
   idea: 2,

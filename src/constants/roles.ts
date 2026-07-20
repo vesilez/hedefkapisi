@@ -7,6 +7,7 @@ export const USER_ROLES = [
 ] as const;
 
 export type UserRole = (typeof USER_ROLES)[number];
+export type AdminRole = Extract<UserRole, "admin" | "superadmin">;
 
 export const USER_ROLE_LABELS = {
   student: "Öğrenci",
@@ -20,6 +21,6 @@ export function isUserRole(value: unknown): value is UserRole {
   return typeof value === "string" && USER_ROLES.some((role) => role === value);
 }
 
-export function isAdminRole(role: UserRole): boolean {
-  return role === "admin" || role === "superadmin";
+export function isAdminRole(value: unknown): value is AdminRole {
+  return value === "admin" || value === "superadmin";
 }

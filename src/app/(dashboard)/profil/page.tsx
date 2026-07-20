@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: { absolute: "Profilim | Hedef Kapısı" },
-  description: "Hedef Kapısı profil bilgilerini tamamla ve güncelle.",
+  description: "Hedef Kapısı profil bilgilerini görüntüle ve güncelle.",
 };
 
 export default function ProfilePage() {
@@ -15,8 +15,7 @@ export default function ProfilePage() {
           Profilim
         </h1>
         <p className="mt-3 leading-7 text-slate-600">
-          Profil bilgilerini tamamla; hayallerini paylaşmaya ve topluluğa katkı
-          sunmaya başla.
+          Bilgilerini tamamla ve Hedef Kapısı deneyimini kişiselleştir.
         </p>
       </div>
       <ProfileForm />

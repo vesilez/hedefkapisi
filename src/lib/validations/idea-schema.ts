@@ -1,11 +1,12 @@
 import { IDEA_STAGES } from "@/constants/idea-stages";
+import { DEFAULT_CATEGORY_IDS } from "@/constants/default-categories";
 import {
   SUPPORT_TYPES,
   SUPPORT_TYPE_MVP_ENABLED,
 } from "@/constants/support-types";
 import { IDEA_VISIBILITIES } from "@/types/idea";
 import { z } from "zod";
-import { citySchema, entityIdSchema, urlSchema } from "./common-schema";
+import { citySchema, urlSchema } from "./common-schema";
 
 const uniqueValues = (values: readonly string[]) =>
   new Set(values).size === values.length;
@@ -41,7 +42,13 @@ export const ideaFormSchema = z.object({
     .trim()
     .min(5, "Hedef kitle en az 5 karakter olmalıdır.")
     .max(500, "Hedef kitle en fazla 500 karakter olabilir."),
-  categoryId: entityIdSchema,
+  categoryId: z
+    .string()
+    .refine(
+      (value) =>
+        DEFAULT_CATEGORY_IDS.some((categoryId) => categoryId === value),
+      "Geçerli bir kategori seçin.",
+    ),
   city: citySchema,
   stage: z.enum(IDEA_STAGES, {
     error: "Geçerli bir fikir aşaması seçin.",

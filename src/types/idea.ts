@@ -7,6 +7,7 @@ import type { PublicStudentSummary } from "./user";
 
 export const IDEA_VISIBILITIES = ["public", "anonymous", "private"] as const;
 export type IdeaVisibility = (typeof IDEA_VISIBILITIES)[number];
+export type IdeaSubmitAction = "draft" | "submit_for_review";
 
 export interface Idea extends BaseEntity {
   studentId: EntityId;
@@ -35,6 +36,8 @@ export interface Idea extends BaseEntity {
   githubUrl: Nullable<string>;
   websiteUrl: Nullable<string>;
   publishedAt: Nullable<ISODateString>;
+  moderatedBy?: Nullable<EntityId>;
+  moderatedAt?: Nullable<ISODateString>;
 }
 
 export interface IdeaFormValues {
@@ -65,10 +68,41 @@ export interface IdeaListItem {
   city: Nullable<string>;
   stage: IdeaStage;
   supportNeeds: SupportType[];
+  visibility: IdeaVisibility;
   isFeatured: boolean;
   supportCount: number;
   coverImageUrl: Nullable<string>;
+  createdAt: ISODateString;
+}
+
+export interface PublicIdeaDetail {
+  id: EntityId;
+  slug: string;
+  title: string;
+  shortDescription: string;
+  description: string;
+  problem: string;
+  solution: string;
+  targetAudience: string;
+  categoryId: EntityId;
+  city: Nullable<string>;
+  stage: IdeaStage;
+  supportNeeds: SupportType[];
+  visibility: Exclude<IdeaVisibility, "private">;
+  isFeatured: boolean;
+  supportCount: number;
+  prototypeUrl: Nullable<string>;
+  githubUrl: Nullable<string>;
+  websiteUrl: Nullable<string>;
   publishedAt: Nullable<ISODateString>;
+  createdAt: ISODateString;
+}
+
+export interface PublicIdeaFilters {
+  search?: string;
+  categoryId?: string;
+  stage?: IdeaStage;
+  city?: string;
 }
 
 export interface IdeaDetail extends Idea {
