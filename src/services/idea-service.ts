@@ -24,6 +24,7 @@ import {
   collection,
   doc,
   getDoc,
+  getDocFromServer,
   getDocs,
   getDocsFromServer,
   limit,
@@ -274,58 +275,122 @@ export async function createIdea(
   }
 }
 
+export async function getIdeaForEdit(
+  ideaId: string,
+  studentId: string,
+): Promise<IdeaServiceResult<Idea | null>> {
+  if (!ideaId || !studentId || auth.currentUser?.uid !== studentId) {
+    return { success: true, data: null };
+  }
+
+  try {
+    const snapshot = await getDocFromServer(doc(db, "ideas", ideaId));
+    if (!snapshot.exists() || snapshot.data().studentId !== studentId) {
+      return { success: true, data: null };
+    }
+
+    const data: unknown = snapshot.data();
+    const parsed = ideaDocumentSchema.safeParse({
+      ...(typeof data === "object" && data !== null ? data : {}),
+      id: snapshot.id,
+    });
+    if (!parsed.success || parsed.data.studentId !== studentId) {
+      return validationFailure("Fikir verileri okunamadı.");
+    }
+
+    return { success: true, data: parsed.data };
+  } catch (error: unknown) {
+    logDevelopmentError("getIdeaForEdit", error);
+    return failure(error);
+  }
+}
+
 export async function updateIdea(
   ideaId: string,
   studentId: string,
-  input: IdeaMutationInput,
+  input: IdeaFormInput,
+  submitAction: IdeaSubmitAction,
 ): Promise<IdeaServiceResult<void>> {
-  const validation = parseInput(input);
-  if (!ideaId || !studentId || !validation?.success) {
+  const validation = ideaFormSchema.safeParse(input);
+  if (!ideaId || !studentId || !validation.success) {
     return validationFailure(
-      validation && !validation.success
-        ? (validation.error.issues[0]?.message ?? "Fikir bilgileri geçersiz.")
-        : "Fikir güncelleme bilgileri geçersiz.",
+      validation.success
+        ? "Fikir güncelleme bilgileri geçersiz."
+        : (validation.error.issues[0]?.message ??
+            "Fikir güncelleme bilgileri geçersiz."),
     );
   }
-
-  if (auth.currentUser?.uid !== studentId) {
+  if (
+    auth.currentUser?.uid !== studentId ||
+    (submitAction !== "draft" && submitAction !== "submit_for_review")
+  ) {
     return {
       success: false,
       error: {
         code: "idea/unauthorized",
-        message: "Bu fikri güncelleme yetkiniz yok.",
+        message: "Fikir bulunamadı veya erişim yetkin yok.",
       },
     };
   }
 
-  const ideaReference = doc(db, "ideas", ideaId);
-
+  const reference = doc(db, "ideas", ideaId);
   try {
-    const existing = await getDoc(ideaReference);
-    if (!existing.exists() || existing.data().studentId !== studentId) {
-      return {
-        success: false,
-        error: {
-          code: "idea/not-found",
-          message: "Güncellenebilir fikir bulunamadı.",
-        },
-      };
-    }
+    await runTransaction(db, async (transaction) => {
+      const snapshot = await transaction.get(reference);
+      if (!snapshot.exists() || snapshot.data().studentId !== studentId) {
+        throw new Error("idea/not-found-or-forbidden");
+      }
+      const currentStatus: unknown = snapshot.data().status;
+      if (
+        currentStatus !== "draft" &&
+        currentStatus !== "revision_requested"
+      ) {
+        throw new Error("idea/not-editable");
+      }
 
-    const generatedSlug = slugify(validation.data.title);
-    await setDoc(
-      ideaReference,
-      {
+      const nextStatus =
+        submitAction === "submit_for_review" ? "pending" : currentStatus;
+      const generatedSlug = slugify(validation.data.title);
+      transaction.update(reference, {
         ...editableData(validation.data),
         slug: generatedSlug || `idea-${ideaId.slice(0, 8)}`,
-        status: statusFromAction(input.submitAction),
+        status: nextStatus,
+        rejectionReason: null,
+        revisionNote:
+          submitAction === "submit_for_review"
+            ? null
+            : (snapshot.data().revisionNote ?? null),
+        publishedAt: null,
+        moderatedBy: null,
+        moderatedAt: null,
         updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    );
+      });
+    });
 
     return { success: true, data: undefined };
   } catch (error: unknown) {
+    if (
+      error instanceof Error &&
+      error.message === "idea/not-found-or-forbidden"
+    ) {
+      return {
+        success: false,
+        error: {
+          code: "idea/not-found-or-forbidden",
+          message: "Fikir bulunamadı veya erişim yetkin yok.",
+        },
+      };
+    }
+    if (error instanceof Error && error.message === "idea/not-editable") {
+      return {
+        success: false,
+        error: {
+          code: "idea/not-editable",
+          message: "Bu fikir mevcut durumunda düzenlenemez.",
+        },
+      };
+    }
+    logDevelopmentError("updateIdea", error);
     return failure(error);
   }
 }
@@ -351,21 +416,56 @@ export async function getIdeaById(
 export async function getIdeasByStudent(
   studentId: string,
 ): Promise<IdeaServiceResult<Idea[]>> {
+  if (!studentId || auth.currentUser?.uid !== studentId) {
+    return {
+      success: false,
+      error: {
+        code: "idea/unauthorized",
+        message: "Bu kullanıcının fikirlerini görüntüleyemezsiniz.",
+      },
+    };
+  }
+
   try {
-    const snapshots = await getDocs(
+    const snapshots = await getDocsFromServer(
       query(collection(db, "ideas"), where("studentId", "==", studentId)),
     );
+
+    if (process.env.NODE_ENV === "development") {
+      console.info("[idea-service:getIdeasByStudent] query:", {
+        authUid: auth.currentUser.uid,
+        ownerField: "studentId",
+        documentCount: snapshots.size,
+      });
+      for (const snapshot of snapshots.docs) {
+        const rawStudentId: unknown = snapshot.data().studentId;
+        console.info("[idea-service:getIdeasByStudent] document:", {
+          id: snapshot.id,
+          studentId:
+            typeof rawStudentId === "string" ? rawStudentId : "invalid",
+        });
+      }
+    }
     const ideas: Idea[] = [];
 
     for (const snapshot of snapshots.docs) {
-      const parsed = ideaDocumentSchema.safeParse(snapshot.data());
+      const data: unknown = snapshot.data();
+      const parsed = ideaDocumentSchema.safeParse({
+        ...(typeof data === "object" && data !== null ? data : {}),
+        id: snapshot.id,
+      });
       if (!parsed.success)
         return validationFailure("Fikir verileri okunamadı.");
+      if (parsed.data.studentId !== studentId) continue;
       ideas.push(parsed.data);
     }
 
-    return { success: true, data: ideas };
+    ideas.sort((firstIdea, secondIdea) =>
+      secondIdea.createdAt.localeCompare(firstIdea.createdAt),
+    );
+    return { success: true, data: ideas.slice(0, 50) };
   } catch (error: unknown) {
+    logDevelopmentError("getIdeasByStudent", error);
     return failure(error);
   }
 }

@@ -21,8 +21,9 @@ import {
   ideaFormSchema,
   type IdeaFormInput,
 } from "@/lib/validations/idea-schema";
-import { createIdea } from "@/services/idea-service";
+import { createIdea, updateIdea } from "@/services/idea-service";
 import { getUserProfile } from "@/services/user-service";
+import type { IdeaStatus } from "@/constants/idea-statuses";
 import type { IdeaSubmitAction, IdeaVisibility } from "@/types/idea";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CheckCircle2, LoaderCircle } from "lucide-react";
@@ -59,7 +60,40 @@ const VISIBILITY_OPTIONS: ReadonlyArray<{
 
 type AccessState = "loading" | "allowed" | "missing-profile" | "wrong-role";
 
-export function IdeaForm() {
+interface IdeaFormProps {
+  mode?: "create" | "edit";
+  initialValues?: IdeaFormInput;
+  ideaId?: string;
+  currentStatus?: IdeaStatus;
+  revisionNote?: string | null;
+}
+
+const EMPTY_VALUES: IdeaFormInput = {
+  title: "",
+  shortDescription: "",
+  description: "",
+  problem: "",
+  solution: "",
+  targetAudience: "",
+  categoryId: "",
+  city: "",
+  stage: "dream",
+  supportNeeds: [],
+  visibility: "public",
+  coverImageUrl: null,
+  attachmentUrls: [],
+  prototypeUrl: "",
+  githubUrl: "",
+  websiteUrl: "",
+};
+
+export function IdeaForm({
+  mode = "create",
+  initialValues,
+  ideaId,
+  currentStatus,
+  revisionNote,
+}: IdeaFormProps) {
   const router = useRouter();
   const { user, loading } = useAuth();
   const [accessState, setAccessState] = useState<AccessState>("loading");
@@ -80,24 +114,7 @@ export function IdeaForm() {
     formState: { errors, isSubmitting },
   } = useForm<IdeaFormInput, unknown, IdeaFormInput>({
     resolver: zodResolver(ideaFormSchema),
-    defaultValues: {
-      title: "",
-      shortDescription: "",
-      description: "",
-      problem: "",
-      solution: "",
-      targetAudience: "",
-      categoryId: "",
-      city: "",
-      stage: "dream",
-      supportNeeds: [],
-      visibility: "public",
-      coverImageUrl: null,
-      attachmentUrls: [],
-      prototypeUrl: "",
-      githubUrl: "",
-      websiteUrl: "",
-    },
+    defaultValues: initialValues ?? EMPTY_VALUES,
   });
 
   useEffect(() => {
@@ -140,10 +157,13 @@ export function IdeaForm() {
       setActiveAction(action);
       setFeedback(null);
 
-      const result = await createIdea(user.id, {
-        ...values,
-        submitAction: action,
-      });
+      const result =
+        mode === "edit" && ideaId
+          ? await updateIdea(ideaId, user.id, values, action)
+          : await createIdea(user.id, {
+              ...values,
+              submitAction: action,
+            });
 
       if (!result.success) {
         setFeedback({ type: "error", message: result.error.message });
@@ -151,13 +171,19 @@ export function IdeaForm() {
         return;
       }
 
-      setCreatedIdeaId(result.data.id);
+      setCreatedIdeaId(
+        mode === "edit" ? (ideaId ?? null) : (result.data?.id ?? null),
+      );
       setFeedback({
         type: "success",
         message:
-          action === "draft"
-            ? "Fikrin taslak olarak kaydedildi."
-            : "Fikrin değerlendirilmek üzere gönderildi.",
+          mode === "edit"
+            ? action === "draft"
+              ? "Fikrin başarıyla güncellendi."
+              : "Fikrin yeniden değerlendirmeye gönderildi."
+            : action === "draft"
+              ? "Fikrin taslak olarak kaydedildi."
+              : "Fikrin değerlendirilmek üzere gönderildi.",
       });
       setActiveAction(null);
     })();
@@ -209,6 +235,22 @@ export function IdeaForm() {
 
   return (
     <Card className="mx-auto max-w-5xl p-5 sm:p-8">
+      {mode === "edit" &&
+        currentStatus === "revision_requested" &&
+        revisionNote && (
+          <section
+            className="mb-8 rounded-xl border border-amber-200 bg-amber-50 p-5 text-amber-900"
+            role="alert"
+            aria-labelledby="revision-request-title"
+          >
+            <h2 id="revision-request-title" className="font-bold">
+              Yönetim Revizyon İstedi
+            </h2>
+            <p className="mt-2 whitespace-pre-wrap text-sm leading-6">
+              {revisionNote}
+            </p>
+          </section>
+        )}
       {feedback && (
         <div
           className={
@@ -227,10 +269,10 @@ export function IdeaForm() {
               <p className="font-semibold">{feedback.message}</p>
               {feedback.type === "success" && (
                 <Link
-                  href="/profil"
+                  href="/fikirlerim"
                   className="mt-2 inline-block text-sm font-semibold underline"
                 >
-                  Fikirlerime Git
+                  Fikirlerime Dön
                 </Link>
               )}
             </div>
@@ -596,7 +638,7 @@ export function IdeaForm() {
                 Taslak kaydediliyor...
               </>
             ) : (
-              "Taslak Kaydet"
+              mode === "edit" ? "Değişiklikleri Kaydet" : "Taslak Kaydet"
             )}
           </Button>
           <Button
@@ -613,7 +655,7 @@ export function IdeaForm() {
                 Onaya gönderiliyor...
               </>
             ) : (
-              "Onaya Gönder"
+              mode === "edit" ? "Tekrar Onaya Gönder" : "Onaya Gönder"
             )}
           </Button>
         </div>

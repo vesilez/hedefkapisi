@@ -15,6 +15,7 @@ import {
   collection,
   doc,
   getDoc,
+  getDocFromServer,
   getDocs,
   getDocsFromServer,
   limit,
@@ -76,8 +77,19 @@ function parseRequests(
 ): SupportRequestServiceResult<SupportRequest[]> {
   const requests: SupportRequest[] = [];
   for (const snapshot of snapshots.docs) {
-    const parsed = requestSchema.safeParse(snapshot.data());
+    const data: unknown = snapshot.data();
+    const parsed = requestSchema.safeParse({
+      ...(typeof data === "object" && data !== null ? data : {}),
+      id: snapshot.id,
+    });
     if (!parsed.success) {
+      if (process.env.NODE_ENV === "development") {
+        console.error(
+          "[support-requests] invalid document:",
+          snapshot.id,
+          parsed.error.issues,
+        );
+      }
       return messageFailure("Destek başvuruları şu anda okunamıyor.");
     }
     requests.push(parsed.data);
@@ -217,6 +229,16 @@ export async function getPendingSupportRequests(): Promise<
         limit(50),
       ),
     );
+    if (process.env.NODE_ENV === "development") {
+      console.info("[support-requests] pending documents:", snapshots.size);
+      for (const snapshot of snapshots.docs) {
+        const status: unknown = snapshot.data().status;
+        console.info("[support-requests] document:", {
+          id: snapshot.id,
+          status: typeof status === "string" ? status : "invalid",
+        });
+      }
+    }
     return parseRequests(snapshots);
   } catch (error: unknown) {
     return failure(error);
@@ -231,22 +253,40 @@ async function reviewSupportRequest(
 ): Promise<SupportRequestServiceResult<void>> {
   const authorization = await ensureAdmin(adminId);
   if (!authorization.success) return authorization;
+  const reviewerId = auth.currentUser?.uid;
+  if (!reviewerId) return messageFailure("Bu iÅŸlem iÃ§in yetkiniz yok.");
 
   try {
+    const reference = doc(db, "supportRequests", requestId);
     await runTransaction(db, async (transaction) => {
-      const reference = doc(db, "supportRequests", requestId);
       const snapshot = await transaction.get(reference);
       if (!snapshot.exists() || snapshot.data().status !== "pending") {
         throw new Error("support-request/not-pending");
       }
-      transaction.update(reference, {
+
+      const reviewData = {
         status,
-        adminNote,
-        reviewedBy: adminId,
+        reviewedBy: reviewerId,
         reviewedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      });
+        ...(adminNote ? { adminNote } : {}),
+      };
+      transaction.update(reference, reviewData);
     });
+
+    const reviewedRequest = await getDocFromServer(reference);
+    const reviewedData = reviewedRequest.data();
+    if (
+      !reviewedRequest.exists() ||
+      reviewedData?.status !== status ||
+      reviewedData.reviewedBy !== reviewerId ||
+      reviewedData.reviewedAt == null ||
+      reviewedData.updatedAt == null
+    ) {
+      return messageFailure(
+        "Destek baÅŸvurusu deÄŸerlendirme bilgileri doÄŸrulanamadÄ±.",
+      );
+    }
     return { success: true, data: undefined };
   } catch (error: unknown) {
     if (error instanceof Error && error.message === "support-request/not-pending") {

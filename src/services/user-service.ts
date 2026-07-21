@@ -10,10 +10,12 @@ import {
 } from "@/lib/firebase/firebase-error";
 import type { ProfileFormValues } from "@/lib/validations/profile-form-schema";
 import { isPublicRegisterRole } from "@/lib/validations/auth-schema";
-import { supporterProfileSchema } from "@/lib/validations/user-schema";
+import {
+  mentorProfileSchema,
+  supporterProfileSchema,
+} from "@/lib/validations/user-schema";
 import {
   GUARDIAN_APPROVAL_STATUSES,
-  MENTOR_PROFILE_STATUSES,
   SCHOOL_TYPES,
   SUPPORTER_TYPES,
   type UserWithProfiles,
@@ -41,7 +43,10 @@ type UserServiceFailure = {
 export type UserServiceResult<T> = { success: true; data: T } | UserServiceFailure;
 
 export type SaveUserProfileInput = ProfileFormValues &
-  Pick<UpdateUserProfileInput, "emailVerified" | "avatarUrl">;
+  Pick<
+    UpdateUserProfileInput,
+    "emailVerified" | "avatarUrl" | "supporterProfile" | "mentorProfile"
+  >;
 
 export interface UserAccessProfile {
   id: string;
@@ -70,6 +75,43 @@ const firestoreTimestampSchema = z.unknown().transform((value, context) => {
 });
 
 const nullableTextSchema = z.string().nullable();
+const mentorProfileDocumentSchema = z
+  .union([
+    z.object({
+      profession: z.string(),
+      organization: z.string(),
+      expertiseAreas: z.array(z.string()),
+      experienceYears: z.number(),
+      biography: z.string(),
+      mentoringTopics: z.array(z.string()),
+      availability: z.string(),
+      linkedinUrl: nullableTextSchema.optional(),
+      websiteUrl: nullableTextSchema.optional(),
+    }),
+    z.object({
+      expertiseAreas: z.array(z.string()),
+      bio: nullableTextSchema,
+      company: nullableTextSchema,
+      title: nullableTextSchema,
+      linkedin: nullableTextSchema,
+      website: nullableTextSchema,
+    }),
+  ])
+  .transform((profile) =>
+    "profession" in profile
+      ? profile
+      : {
+          profession: profile.title ?? "",
+          organization: profile.company ?? "",
+          expertiseAreas: profile.expertiseAreas,
+          experienceYears: 0,
+          biography: profile.bio ?? "",
+          mentoringTopics: profile.expertiseAreas,
+          availability: "Hafta içi",
+          linkedinUrl: profile.linkedin,
+          websiteUrl: profile.website,
+        },
+  );
 const userProfileDocumentSchema = z.object({
   id: z.string().min(1),
   role: z.enum(USER_ROLES),
@@ -115,17 +157,7 @@ const userProfileDocumentSchema = z.object({
     .nullable()
     .optional()
     .default(null),
-  mentorProfile: z
-    .object({
-      userId: z.string(),
-      expertiseAreas: z.array(z.string()),
-      bio: nullableTextSchema,
-      company: nullableTextSchema,
-      title: nullableTextSchema,
-      linkedin: nullableTextSchema,
-      website: nullableTextSchema,
-      status: z.enum(MENTOR_PROFILE_STATUSES),
-    })
+  mentorProfile: mentorProfileDocumentSchema
     .nullable()
     .optional()
     .default(null),
@@ -323,14 +355,15 @@ export async function updateUserProfile(
       existingRole === "supporter"
         ? supporterProfileSchema.safeParse({
             userId,
-            supporterType: input.supporterType,
-            organizationName: input.organizationName || null,
-            title: input.title || null,
-            expertiseAreas: input.expertiseAreas,
-            supportTypes: input.supportTypes,
-            bio: input.bio || null,
-            website: input.website || null,
-            linkedin: input.linkedin || null,
+            supporterType: input.supporterProfile?.supporterType,
+            organizationName:
+              input.supporterProfile?.organizationName || null,
+            title: input.supporterProfile?.title || null,
+            expertiseAreas: input.supporterProfile?.expertiseAreas,
+            supportTypes: input.supporterProfile?.supportTypes,
+            bio: input.supporterProfile?.bio || null,
+            website: input.supporterProfile?.website || null,
+            linkedin: input.supporterProfile?.linkedin || null,
             status: "active",
           })
         : null;
@@ -343,6 +376,22 @@ export async function updateUserProfile(
           message:
             supporterProfile.error.issues[0]?.message ??
             "Destekçi profil bilgileri geçersiz.",
+        },
+      };
+    }
+
+    const mentorProfile =
+      existingRole === "mentor"
+        ? mentorProfileSchema.safeParse(input.mentorProfile)
+        : null;
+    if (mentorProfile && !mentorProfile.success) {
+      return {
+        success: false,
+        error: {
+          code: "user/invalid-mentor-profile",
+          message:
+            mentorProfile.error.issues[0]?.message ??
+            "Mentor profil bilgileri geçersiz.",
         },
       };
     }
@@ -365,7 +414,7 @@ export async function updateUserProfile(
 
     const roleProfiles = {
       studentProfile:
-        existingRole === "student"
+        input.role === "student"
           ? {
               userId,
               schoolType: input.schoolType ?? "other",
@@ -381,21 +430,24 @@ export async function updateUserProfile(
             }
           : null,
       supporterProfile:
-        existingRole === "supporter"
+        input.role === "supporter"
           ? supporterProfile?.data
           : null,
       mentorProfile:
-        existingRole === "mentor"
-          ? {
-              userId,
-              expertiseAreas: input.expertiseAreas,
-              bio: input.bio || null,
-              company: input.company || null,
-              title: input.title || null,
-              linkedin: input.linkedin || null,
-              website: input.website || null,
-              status: "pending" as const,
-            }
+        input.role === "mentor"
+          ? mentorProfile?.success
+            ? {
+                profession: mentorProfile.data.profession,
+                organization: mentorProfile.data.organization,
+                expertiseAreas: mentorProfile.data.expertiseAreas,
+                experienceYears: mentorProfile.data.experienceYears,
+                biography: mentorProfile.data.biography,
+                mentoringTopics: mentorProfile.data.mentoringTopics,
+                availability: mentorProfile.data.availability,
+                linkedinUrl: mentorProfile.data.linkedinUrl || null,
+                websiteUrl: mentorProfile.data.websiteUrl || null,
+              }
+            : null
           : null,
     };
 

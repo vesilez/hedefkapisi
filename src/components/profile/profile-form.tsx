@@ -7,6 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { USER_ROLE_LABELS } from "@/constants/roles";
+import {
+  MENTOR_AVAILABILITY_OPTIONS,
+  MENTOR_EXPERTISE_AREAS,
+  MENTORING_TOPICS,
+} from "@/constants/mentor-profile";
 import { SUPPORT_TYPES, SUPPORT_TYPE_LABELS } from "@/constants/support-types";
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -48,6 +53,17 @@ const SUPPORTER_TYPE_LABELS = {
   other: "Diğer",
 } as const;
 
+type MentorArea = (typeof MENTOR_EXPERTISE_AREAS)[number];
+type MentorAvailability = (typeof MENTOR_AVAILABILITY_OPTIONS)[number];
+
+function isMentorArea(value: string): value is MentorArea {
+  return MENTOR_EXPERTISE_AREAS.some((area) => area === value);
+}
+
+function isMentorAvailability(value: string): value is MentorAvailability {
+  return MENTOR_AVAILABILITY_OPTIONS.some((option) => option === value);
+}
+
 const PROFILE_FIELD_LABELS: Partial<Record<keyof ProfileFormInput, string>> = {
   name: "Ad",
   surname: "Soyad",
@@ -62,6 +78,14 @@ const PROFILE_FIELD_LABELS: Partial<Record<keyof ProfileFormInput, string>> = {
   supportTypes: "Destek türleri",
   website: "Website",
   linkedin: "LinkedIn",
+  profession: "Meslek",
+  organization: "Çalıştığı kurum",
+  experienceYears: "Deneyim yılı",
+  biography: "Kısa biyografi",
+  mentoringTopics: "Mentorluk konuları",
+  availability: "Uygunluk durumu",
+  linkedinUrl: "LinkedIn adresi",
+  websiteUrl: "Web sitesi",
 };
 
 function visibleValidationErrors(errors: FieldErrors<ProfileFormInput>) {
@@ -98,14 +122,6 @@ function emptyValues(
     grade: "",
     dateOfBirth: "",
     guardianApprovalRequired: false,
-    supporterType: "individual",
-    organizationName: "",
-    title: "",
-    expertiseAreas: [],
-    supportTypes: [],
-    company: "",
-    website: "",
-    linkedin: "",
   };
 }
 
@@ -114,44 +130,63 @@ function valuesFromProfile(
 ): ProfileFormValues | null {
   if (!isProfileRole(profile.role)) return null;
 
-  const roleProfile =
-    profile.role === "student"
-      ? profile.studentProfile
-      : profile.role === "supporter"
-        ? profile.supporterProfile
-        : profile.mentorProfile;
-
-  return {
+  const commonValues = {
     name: profile.name,
     surname: profile.surname,
     email: profile.email,
     phone: profile.phone ?? "",
     city: profile.city ?? "",
-    role: profile.role,
-    bio: roleProfile?.bio ?? "",
-    schoolType: profile.studentProfile?.schoolType ?? "high_school",
-    schoolName: profile.studentProfile?.schoolName ?? "",
-    department: profile.studentProfile?.department ?? "",
-    grade: profile.studentProfile?.grade ?? "",
-    dateOfBirth: profile.studentProfile?.dateOfBirth ?? null,
-    guardianApprovalRequired:
-      profile.studentProfile?.guardianApprovalRequired ?? false,
-    supporterType: profile.supporterProfile?.supporterType ?? "individual",
-    organizationName: profile.supporterProfile?.organizationName ?? "",
-    title:
-      profile.supporterProfile?.title ?? profile.mentorProfile?.title ?? "",
+  };
+
+  if (profile.role === "student") {
+    return {
+      ...commonValues,
+      role: "student",
+      bio: profile.studentProfile?.bio ?? "",
+      schoolType: profile.studentProfile?.schoolType ?? "high_school",
+      schoolName: profile.studentProfile?.schoolName ?? "",
+      department: profile.studentProfile?.department ?? "",
+      grade: profile.studentProfile?.grade ?? "",
+      dateOfBirth: profile.studentProfile?.dateOfBirth ?? null,
+      guardianApprovalRequired:
+        profile.studentProfile?.guardianApprovalRequired ?? false,
+    };
+  }
+
+  if (profile.role === "supporter") {
+    return {
+      ...commonValues,
+      role: "supporter",
+      bio: profile.supporterProfile?.bio ?? "",
+      supporterType: profile.supporterProfile?.supporterType ?? "individual",
+      organizationName: profile.supporterProfile?.organizationName ?? "",
+      title: profile.supporterProfile?.title ?? "",
+      expertiseAreas: profile.supporterProfile?.expertiseAreas ?? [],
+      supportTypes: profile.supporterProfile?.supportTypes ?? [],
+      website: profile.supporterProfile?.website ?? "",
+      linkedin: profile.supporterProfile?.linkedin ?? "",
+    };
+  }
+
+  return {
+    ...commonValues,
+    role: "mentor",
+    bio: "",
+    profession: profile.mentorProfile?.profession ?? "",
+    organization: profile.mentorProfile?.organization ?? "",
     expertiseAreas:
-      profile.supporterProfile?.expertiseAreas ??
-      profile.mentorProfile?.expertiseAreas ??
-      [],
-    supportTypes: profile.supporterProfile?.supportTypes ?? [],
-    company: profile.mentorProfile?.company ?? "",
-    website:
-      profile.supporterProfile?.website ?? profile.mentorProfile?.website ?? "",
-    linkedin:
-      profile.supporterProfile?.linkedin ??
-      profile.mentorProfile?.linkedin ??
-      "",
+      profile.mentorProfile?.expertiseAreas.filter(isMentorArea) ?? [],
+    experienceYears: profile.mentorProfile?.experienceYears ?? 0,
+    biography: profile.mentorProfile?.biography ?? "",
+    mentoringTopics:
+      profile.mentorProfile?.mentoringTopics.filter(isMentorArea) ?? [],
+    availability:
+      profile.mentorProfile &&
+      isMentorAvailability(profile.mentorProfile.availability)
+        ? profile.mentorProfile.availability
+        : "Hafta içi",
+    linkedinUrl: profile.mentorProfile?.linkedinUrl ?? "",
+    websiteUrl: profile.mentorProfile?.websiteUrl ?? "",
   };
 }
 
@@ -224,9 +259,12 @@ export function ProfileForm() {
       if (process.env.NODE_ENV === "development") {
         console.info("[profile-submit] valid submit:", {
           role: values.role,
-          supporterTypePresent: Boolean(values.supporterType),
-          expertiseAreaCount: values.expertiseAreas.length,
-          supportTypeCount: values.supportTypes.length,
+          supporterTypePresent:
+            values.role === "supporter" && Boolean(values.supporterType),
+          expertiseAreaCount:
+            values.role === "student" ? 0 : values.expertiseAreas.length,
+          supportTypeCount:
+            values.role === "supporter" ? values.supportTypes.length : 0,
         });
       }
 
@@ -236,13 +274,73 @@ export function ProfileForm() {
         email: user.email ?? values.email,
         emailVerified: user.emailVerified,
         avatarUrl: user.photoURL,
+        supporterProfile:
+          values.role === "supporter"
+            ? {
+                supporterType: values.supporterType,
+                organizationName: values.organizationName,
+                title: values.title,
+                expertiseAreas: values.expertiseAreas,
+                supportTypes: values.supportTypes,
+                bio: values.bio,
+                website: values.website,
+                linkedin: values.linkedin,
+              }
+            : undefined,
+        mentorProfile:
+          values.role === "mentor"
+            ? {
+                profession: values.profession,
+                organization: values.organization,
+                expertiseAreas: values.expertiseAreas,
+                experienceYears: values.experienceYears,
+                biography: values.biography,
+                mentoringTopics: values.mentoringTopics,
+                availability: values.availability,
+                ...(values.linkedinUrl
+                  ? { linkedinUrl: values.linkedinUrl }
+                  : {}),
+                ...(values.websiteUrl ? { websiteUrl: values.websiteUrl } : {}),
+              }
+            : undefined,
       });
 
-      setFeedback(
-        result.success
-          ? { type: "success", message: "Profilin başarıyla kaydedildi." }
-          : { type: "error", message: result.error.message },
-      );
+      if (!result.success) {
+        setFeedback({ type: "error", message: result.error.message });
+        return;
+      }
+
+      const refreshedProfile = await getUserProfile(user.id);
+      if (!refreshedProfile.success || !refreshedProfile.data) {
+        setFeedback({
+          type: "error",
+          message: refreshedProfile.success
+            ? "Profil kaydedildi ancak yeniden yüklenemedi. Lütfen sayfayı yenileyin."
+            : refreshedProfile.error.message,
+        });
+        return;
+      }
+
+      const refreshedValues = valuesFromProfile(refreshedProfile.data);
+      if (!refreshedValues) {
+        setFeedback({
+          type: "error",
+          message: "Kaydedilen profil yeniden yüklenemedi.",
+        });
+        return;
+      }
+
+      reset({
+        ...refreshedValues,
+        email: user.email ?? refreshedValues.email,
+      });
+      setFeedback({
+        type: "success",
+        message:
+          values.role === "mentor"
+            ? "Mentor profilin başarıyla kaydedildi."
+            : "Profilin başarıyla kaydedildi.",
+      });
     },
     (validationErrors) => {
       const visibleErrors = visibleValidationErrors(validationErrors);
@@ -462,7 +560,7 @@ export function ProfileForm() {
           </div>
         </div>
 
-        <div className="mt-5">
+        {role !== "mentor" && <div className="mt-5">
           <label htmlFor="bio" className="text-sm font-semibold text-slate-800">
             Kısa biyografi
           </label>
@@ -478,7 +576,7 @@ export function ProfileForm() {
               {errors.bio.message}
             </p>
           )}
-        </div>
+        </div>}
 
         {role === "student" && (
           <section className="mt-8 border-t border-slate-200 pt-6">
@@ -661,20 +759,38 @@ export function ProfileForm() {
                 </>
               )}
               {role === "mentor" && (
-                <div>
-                  <label
-                    htmlFor="company"
-                    className="text-sm font-semibold text-slate-800"
-                  >
-                    Şirket
-                  </label>
-                  <Input
-                    id="company"
-                    className="mt-2"
-                    {...register("company")}
-                  />
-                </div>
+                <>
+                  <div>
+                    <label htmlFor="profession" className="text-sm font-semibold text-slate-800">
+                      Meslek
+                    </label>
+                    <Input id="profession" className="mt-2" {...register("profession")} />
+                    {errors.profession && <p className="mt-1 text-sm text-red-700">{errors.profession.message}</p>}
+                  </div>
+                  <div>
+                    <label htmlFor="organization" className="text-sm font-semibold text-slate-800">
+                      Çalıştığı kurum
+                    </label>
+                    <Input id="organization" className="mt-2" {...register("organization")} />
+                  </div>
+                  <div>
+                    <label htmlFor="experienceYears" className="text-sm font-semibold text-slate-800">
+                      Deneyim yılı
+                    </label>
+                    <Input id="experienceYears" type="number" min={0} max={60} className="mt-2" {...register("experienceYears")} />
+                    {errors.experienceYears && <p className="mt-1 text-sm text-red-700">{errors.experienceYears.message}</p>}
+                  </div>
+                  <div>
+                    <label htmlFor="availability" className="text-sm font-semibold text-slate-800">
+                      Uygunluk durumu
+                    </label>
+                    <Select id="availability" className="mt-2" {...register("availability")}>
+                      {MENTOR_AVAILABILITY_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+                    </Select>
+                  </div>
+                </>
               )}
+              {role === "supporter" && <>
               <div>
                 <label
                   htmlFor="title"
@@ -741,9 +857,10 @@ export function ProfileForm() {
                   </p>
                 )}
               </div>
+              </>}
             </div>
 
-            <div className="mt-5">
+            {role === "supporter" && <div className="mt-5">
               <label
                 htmlFor="expertiseAreas"
                 className="text-sm font-semibold text-slate-800"
@@ -785,7 +902,7 @@ export function ProfileForm() {
                   {errors.expertiseAreas.message}
                 </p>
               )}
-            </div>
+            </div>}
 
             {role === "supporter" && (
               <fieldset className="mt-5">
@@ -814,6 +931,55 @@ export function ProfileForm() {
                   </p>
                 )}
               </fieldset>
+            )}
+
+            {role === "mentor" && (
+              <div className="mt-6 grid gap-6">
+                <fieldset>
+                  <legend className="text-sm font-semibold text-slate-800">Uzmanlık alanları</legend>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    {MENTOR_EXPERTISE_AREAS.map((area) => (
+                      <label key={area} className="flex items-center gap-2 rounded-lg border border-slate-200 p-3 text-sm">
+                        <input type="checkbox" value={area} className="size-4" {...register("expertiseAreas")} />
+                        {area}
+                      </label>
+                    ))}
+                  </div>
+                  {errors.expertiseAreas && <p className="mt-2 text-sm text-red-700" role="alert">{errors.expertiseAreas.message}</p>}
+                </fieldset>
+
+                <div>
+                  <label htmlFor="biography" className="text-sm font-semibold text-slate-800">Kısa biyografi</label>
+                  <Textarea id="biography" className="mt-2 min-h-32" {...register("biography")} />
+                  {errors.biography && <p className="mt-2 text-sm text-red-700" role="alert">{errors.biography.message}</p>}
+                </div>
+
+                <fieldset>
+                  <legend className="text-sm font-semibold text-slate-800">Mentorluk verebileceği konular</legend>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    {MENTORING_TOPICS.map((topic) => (
+                      <label key={topic} className="flex items-center gap-2 rounded-lg border border-slate-200 p-3 text-sm">
+                        <input type="checkbox" value={topic} className="size-4" {...register("mentoringTopics")} />
+                        {topic}
+                      </label>
+                    ))}
+                  </div>
+                  {errors.mentoringTopics && <p className="mt-2 text-sm text-red-700" role="alert">{errors.mentoringTopics.message}</p>}
+                </fieldset>
+
+                <div className="grid gap-5 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="linkedinUrl" className="text-sm font-semibold text-slate-800">LinkedIn adresi</label>
+                    <Input id="linkedinUrl" type="url" className="mt-2" {...register("linkedinUrl")} />
+                    {errors.linkedinUrl && <p className="mt-1 text-sm text-red-700">{errors.linkedinUrl.message}</p>}
+                  </div>
+                  <div>
+                    <label htmlFor="websiteUrl" className="text-sm font-semibold text-slate-800">Web sitesi</label>
+                    <Input id="websiteUrl" type="url" className="mt-2" {...register("websiteUrl")} />
+                    {errors.websiteUrl && <p className="mt-1 text-sm text-red-700">{errors.websiteUrl.message}</p>}
+                  </div>
+                </div>
+              </div>
             )}
           </section>
         )}

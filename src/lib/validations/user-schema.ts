@@ -1,8 +1,12 @@
 import { SUPPORT_TYPES } from "@/constants/support-types";
 import { USER_STATUSES } from "@/constants/user-statuses";
 import {
+  MENTOR_AVAILABILITY_OPTIONS,
+  MENTOR_EXPERTISE_AREAS,
+  MENTORING_TOPICS,
+} from "@/constants/mentor-profile";
+import {
   GUARDIAN_APPROVAL_STATUSES,
-  MENTOR_PROFILE_STATUSES,
   SCHOOL_TYPES,
   SUPPORTER_TYPES,
 } from "@/types/user";
@@ -88,22 +92,38 @@ export const supporterProfileSchema = z.object({
 });
 
 export const mentorProfileSchema = z.object({
-  userId: entityIdSchema,
+  profession: z
+    .string()
+    .trim()
+    .min(1, "Meslek alanı zorunludur.")
+    .max(120, "Meslek en fazla 120 karakter olabilir."),
+  organization: z
+    .string()
+    .trim()
+    .max(200, "Çalışılan kurum en fazla 200 karakter olabilir."),
   expertiseAreas: z
-    .array(z.string().trim().min(1, "Uzmanlık alanı boş olamaz."))
-    .min(1, "En az bir uzmanlık alanı ekleyin.")
+    .array(z.enum(MENTOR_EXPERTISE_AREAS))
+    .min(1, "En az bir uzmanlık alanı seçin.")
     .refine(uniqueValues, "Uzmanlık alanları tekrar eden değer içeremez."),
-  bio: optionalLimitedText(1000, "Biyografi en fazla 1000 karakter olabilir."),
-  company: optionalLimitedText(
-    200,
-    "Şirket adı en fazla 200 karakter olabilir.",
-  ),
-  title: optionalLimitedText(120, "Unvan en fazla 120 karakter olabilir."),
-  linkedin: urlSchema,
-  website: urlSchema,
-  status: z.enum(MENTOR_PROFILE_STATUSES, {
-    error: "Geçerli bir mentor profil durumu seçin.",
+  experienceYears: z.coerce
+    .number<number>()
+    .int("Deneyim yılı tam sayı olmalıdır.")
+    .min(0, "Deneyim yılı 0'dan küçük olamaz.")
+    .max(60, "Deneyim yılı 60'tan büyük olamaz."),
+  biography: z
+    .string()
+    .trim()
+    .min(30, "Biyografi en az 30 karakter olmalıdır.")
+    .max(1000, "Biyografi en fazla 1000 karakter olabilir."),
+  mentoringTopics: z
+    .array(z.enum(MENTORING_TOPICS))
+    .min(1, "En az bir mentorluk konusu seçin.")
+    .refine(uniqueValues, "Mentorluk konuları tekrar eden değer içeremez."),
+  availability: z.enum(MENTOR_AVAILABILITY_OPTIONS, {
+    error: "Geçerli bir uygunluk durumu seçin.",
   }),
+  linkedinUrl: urlSchema,
+  websiteUrl: urlSchema,
 });
 
 export type BaseUserProfileInput = z.infer<typeof baseUserProfileSchema>;

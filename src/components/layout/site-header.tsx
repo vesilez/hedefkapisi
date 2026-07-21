@@ -4,15 +4,39 @@ import { useAuth } from "@/hooks/use-auth";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Menu } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { mainNavigation } from "@/config/navigation";
 import { siteConfig } from "@/config/site";
+import { getUserAccessProfile } from "@/services/user-service";
+import type { UserRole } from "@/constants/roles";
 import { PageContainer } from "./page-container";
 
 export function SiteHeader() {
   const router = useRouter();
   const { user, loading, logout } = useAuth();
   const [loggingOut, setLoggingOut] = useState(false);
+  const [profileAccess, setProfileAccess] = useState<{
+    userId: string;
+    role: UserRole | null;
+  } | null>(null);
+
+  useEffect(() => {
+    if (loading) return;
+    if (!user) return;
+
+    let active = true;
+    void getUserAccessProfile(user.id).then((result) => {
+      if (!active) return;
+      setProfileAccess({
+        userId: user.id,
+        role: result.success ? (result.data?.role ?? null) : null,
+      });
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [loading, user]);
 
   async function handleLogout() {
     if (loggingOut) return;
@@ -49,6 +73,15 @@ export function SiteHeader() {
           {!loading &&
             (user ? (
               <>
+                {profileAccess?.userId === user.id &&
+                  profileAccess.role === "student" && (
+                    <Link
+                      href="/fikirlerim"
+                      className="rounded-xl px-4 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-50"
+                    >
+                      Fikirlerim
+                    </Link>
+                  )}
                 <Link
                   href="/profil"
                   className="rounded-xl px-4 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-50"
@@ -105,6 +138,15 @@ export function SiteHeader() {
             {!loading &&
               (user ? (
                 <>
+                  {profileAccess?.userId === user.id &&
+                    profileAccess.role === "student" && (
+                      <Link
+                        href="/fikirlerim"
+                        className="rounded-lg px-3 py-2 text-sm font-semibold text-blue-800"
+                      >
+                        Fikirlerim
+                      </Link>
+                    )}
                   <Link
                     href="/profil"
                     className="rounded-lg px-3 py-2 text-sm font-semibold text-blue-800"

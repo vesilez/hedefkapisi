@@ -39,6 +39,7 @@ export function SupportRequestList() {
       setRequests(requestsResult.data);
       setState("ready");
     } else {
+      setFeedback(requestsResult.error.message);
       setState("list-error");
     }
   }
@@ -67,6 +68,7 @@ export function SupportRequestList() {
         setRequests(result.data);
         setState("ready");
       } else {
+        setFeedback(result.error.message);
         setState("list-error");
       }
     });
@@ -90,7 +92,7 @@ export function SupportRequestList() {
   if (state === "profile-error" || state === "list-error") {
     return (
       <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center" role="alert">
-        <p className="font-semibold text-red-800">{state === "profile-error" ? "Kullanıcı profili yüklenemedi." : "Destek başvuruları yüklenemedi."}</p>
+        <p className="font-semibold text-red-800">{state === "profile-error" ? "Kullanıcı profili yüklenemedi." : feedback ?? "Destek başvuruları yüklenemedi."}</p>
         <Button className="mt-4" onClick={() => void load(user.id)}>Tekrar Dene</Button>
       </div>
     );

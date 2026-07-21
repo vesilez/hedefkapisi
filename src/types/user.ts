@@ -72,6 +72,17 @@ export interface UpdateUserProfileInput {
   city: string;
   emailVerified: boolean;
   avatarUrl: Nullable<string>;
+  supporterProfile?: {
+    supporterType?: SupporterType;
+    organizationName?: Nullable<string>;
+    title?: Nullable<string>;
+    expertiseAreas: string[];
+    supportTypes: SupportType[];
+    bio?: Nullable<string>;
+    website?: Nullable<string>;
+    linkedin?: Nullable<string>;
+  };
+  mentorProfile?: MentorProfile;
 }
 
 export interface StudentProfile {
@@ -100,14 +111,15 @@ export interface SupporterProfile {
 }
 
 export interface MentorProfile {
-  userId: EntityId;
+  profession: string;
+  organization: string;
   expertiseAreas: string[];
-  bio: Nullable<string>;
-  company: Nullable<string>;
-  title: Nullable<string>;
-  linkedin: Nullable<string>;
-  website: Nullable<string>;
-  status: MentorProfileStatus;
+  experienceYears: number;
+  biography: string;
+  mentoringTopics: string[];
+  availability: string;
+  linkedinUrl?: Nullable<string>;
+  websiteUrl?: Nullable<string>;
 }
 
 export interface UserWithProfiles extends BaseUser {
