@@ -28,9 +28,10 @@ export function ForgotPasswordForm() {
   });
 
   const onSubmit = handleSubmit(async (values) => {
+    console.log("FORM SUBMIT ÇALIŞTI", values);
     setFeedback(null);
     const result = await sendPasswordReset(values);
-
+    console.log("RESET RESULT:", result);
     setFeedback(
       result.success
         ? {
