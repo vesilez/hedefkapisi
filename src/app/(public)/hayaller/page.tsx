@@ -1,5 +1,6 @@
 import { IdeaList } from "@/components/ideas";
 import { PageContainer } from "@/components/layout/page-container";
+import { normalizeIdeaFilters } from "@/services/idea-filter-service";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -7,7 +8,13 @@ export const metadata: Metadata = {
   description: "Öğrencilerin paylaştığı hayalleri ve fikirleri keşfet.",
 };
 
-export default function IdeasPage() {
+export default async function IdeasPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const initialFilters = normalizeIdeaFilters(await searchParams);
+
   return (
     <PageContainer className="py-10 sm:py-16">
       <div className="mb-8 max-w-3xl">
@@ -19,7 +26,7 @@ export default function IdeasPage() {
           projeleri keşfet.
         </p>
       </div>
-      <IdeaList />
+      <IdeaList initialFilters={initialFilters} />
     </PageContainer>
   );
 }

@@ -31,6 +31,7 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type ComponentType } from "react";
+import { AdminAnalyticsSection } from "./admin-analytics-charts";
 
 interface DashboardStatistics {
   users: AdminUserStatistics;
@@ -227,6 +228,8 @@ export function AdminOverview() {
           </Card>
         ))}
       </div>
+
+      <AdminAnalyticsSection adminId={user.id} />
 
       <Card className="mt-8">
         <h2 className="text-xl font-bold text-slate-950">Hızlı işlemler</h2>

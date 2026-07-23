@@ -5,22 +5,25 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { getPublicIdeas } from "@/services/idea-service";
 import type { IdeaListItem } from "@/types/idea";
+import {
+  EMPTY_IDEA_FILTERS,
+  filterAndSortIdeas,
+  ideaFiltersToQuery,
+  type IdeaFilterValues,
+} from "@/services/idea-filter-service";
 import { Lightbulb } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { IdeaCard } from "./idea-card";
-import { IdeaFilters, type IdeaFilterValues } from "./idea-filters";
+import { IdeaFilters } from "./idea-filters";
 
-const EMPTY_FILTERS: IdeaFilterValues = {
-  search: "",
-  categoryId: "",
-  stage: "",
-  city: "",
-};
-
-export function IdeaList() {
+export function IdeaList({
+  initialFilters = EMPTY_IDEA_FILTERS,
+}: {
+  initialFilters?: IdeaFilterValues;
+}) {
   const [ideas, setIdeas] = useState<IdeaListItem[]>([]);
-  const [filters, setFilters] = useState<IdeaFilterValues>(EMPTY_FILTERS);
+  const [filters, setFilters] = useState<IdeaFilterValues>(initialFilters);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
@@ -55,23 +58,18 @@ export function IdeaList() {
   }, []);
 
   const filteredIdeas = useMemo(() => {
-    const search = filters.search.trim().toLocaleLowerCase("tr-TR");
-    const city = filters.city.trim().toLocaleLowerCase("tr-TR");
-
-    return ideas.filter((idea) => {
-      const matchesSearch =
-        !search ||
-        idea.title.toLocaleLowerCase("tr-TR").includes(search) ||
-        idea.shortDescription.toLocaleLowerCase("tr-TR").includes(search);
-      const matchesCategory =
-        !filters.categoryId || idea.categoryId === filters.categoryId;
-      const matchesStage = !filters.stage || idea.stage === filters.stage;
-      const matchesCity =
-        !city || idea.city?.toLocaleLowerCase("tr-TR").includes(city);
-
-      return matchesSearch && matchesCategory && matchesStage && matchesCity;
-    });
+    return filterAndSortIdeas(ideas, filters);
   }, [filters, ideas]);
+
+  function updateFilters(nextFilters: IdeaFilterValues) {
+    setFilters(nextFilters);
+    const query = ideaFiltersToQuery(nextFilters);
+    window.history.replaceState(
+      null,
+      "",
+      query ? `/hayaller?${query}` : "/hayaller",
+    );
+  }
 
   if (loading) {
     return (
@@ -125,8 +123,8 @@ export function IdeaList() {
     <div>
       <IdeaFilters
         values={filters}
-        onChange={setFilters}
-        onClear={() => setFilters(EMPTY_FILTERS)}
+        onChange={updateFilters}
+        onClear={() => updateFilters(EMPTY_IDEA_FILTERS)}
       />
       <p className="mt-5 text-sm text-slate-600" aria-live="polite">
         {filteredIdeas.length} hayal bulundu.

@@ -15,6 +15,7 @@ import {
   deleteDoc,
   doc,
   getDoc,
+  getDocs,
   onSnapshot,
   query,
   runTransaction,
@@ -193,6 +194,42 @@ export async function createIdeaComment(
         status: "active",
       },
     };
+  } catch (error: unknown) {
+    return failure(error);
+  }
+}
+
+export async function getIdeaCommentsByUser(
+  userId: string,
+): Promise<CommentServiceResult<IdeaComment[]>> {
+  if (!userId || auth.currentUser?.uid !== userId) {
+    return messageFailure("Yorumları görüntülemek için giriş yapmalısınız.");
+  }
+
+  try {
+    const snapshots = await getDocs(
+      query(collection(db, "comments"), where("userId", "==", userId)),
+    );
+    const comments: IdeaComment[] = [];
+    for (const snapshot of snapshots.docs) {
+      const data: unknown = snapshot.data();
+      const parsed = commentDocumentSchema.safeParse({
+        ...(typeof data === "object" && data !== null ? data : {}),
+        id: snapshot.id,
+      });
+      if (!parsed.success) {
+        console.error("[comment-service:getIdeaCommentsByUser] invalid comment", {
+          documentId: snapshot.id,
+          issues: parsed.error.issues,
+        });
+        return messageFailure("Yorumlar şu anda okunamıyor.");
+      }
+      comments.push(parsed.data);
+    }
+    comments.sort((first, second) =>
+      second.createdAt.localeCompare(first.createdAt),
+    );
+    return { success: true, data: comments };
   } catch (error: unknown) {
     return failure(error);
   }

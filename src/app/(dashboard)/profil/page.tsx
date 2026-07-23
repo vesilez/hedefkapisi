@@ -1,5 +1,5 @@
 import { PageContainer } from "@/components/layout/page-container";
-import { ProfileForm } from "@/components/profile";
+import { ProfileDashboard } from "@/components/profile";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -18,7 +18,7 @@ export default function ProfilePage() {
           Bilgilerini tamamla ve Hedef Kapısı deneyimini kişiselleştir.
         </p>
       </div>
-      <ProfileForm />
+      <ProfileDashboard />
     </PageContainer>
   );
 }

@@ -42,6 +42,7 @@ const publicIdeaSchema = z.object({
   visibility: z.enum(["public", "anonymous"]),
   isFeatured: z.boolean(),
   supportCount: z.number(),
+  likeCount: z.number().int().nonnegative().optional().default(0),
   prototypeUrl: z.string().nullable(),
   githubUrl: z.string().nullable(),
   websiteUrl: z.string().nullable(),

@@ -4,5 +4,7 @@ export { IdeaFilters } from "./idea-filters";
 export { IdeaList } from "./idea-list";
 export { IdeaDetail } from "./idea-detail";
 export { IdeaComments } from "./idea-comments";
+export { IdeaEngagement } from "./idea-engagement";
+export { FavoriteIdeas } from "./favorite-ideas";
 export { MyIdeas } from "./my-ideas";
 export { IdeaEdit } from "./idea-edit";

@@ -15,7 +15,15 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="tr">
+    <html lang="tr" data-theme="light" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              '(function(){try{var t=localStorage.getItem("hedef-kapisi-theme");var d=t==="dark"||t!=="light"&&matchMedia("(prefers-color-scheme: dark)").matches;var v=d?"dark":"light";document.documentElement.dataset.theme=v;document.documentElement.style.colorScheme=v}catch(e){}})()',
+          }}
+        />
+      </head>
       <body>
         <AuthProvider>
           <div className="flex min-h-screen flex-col">

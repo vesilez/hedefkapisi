@@ -4,6 +4,7 @@ import type { SupportType } from "@/constants/support-types";
 import type { Category } from "./category";
 import type { BaseEntity, EntityId, ISODateString, Nullable } from "./common";
 import type { PublicStudentSummary } from "./user";
+import type { PublicIdeaSort } from "@/services/idea-filter-service";
 
 export const IDEA_VISIBILITIES = ["public", "anonymous", "private"] as const;
 export type IdeaVisibility = (typeof IDEA_VISIBILITIES)[number];
@@ -30,6 +31,8 @@ export interface Idea extends BaseEntity {
   isFeatured: boolean;
   viewCount: number;
   supportCount: number;
+  likeCount: number;
+  commentCount: number;
   coverImageUrl: Nullable<string>;
   attachmentUrls: string[];
   prototypeUrl: Nullable<string>;
@@ -71,6 +74,8 @@ export interface IdeaListItem {
   visibility: IdeaVisibility;
   isFeatured: boolean;
   supportCount: number;
+  likeCount: number;
+  commentCount: number;
   coverImageUrl: Nullable<string>;
   createdAt: ISODateString;
 }
@@ -92,6 +97,7 @@ export interface PublicIdeaDetail {
   visibility: Exclude<IdeaVisibility, "private">;
   isFeatured: boolean;
   supportCount: number;
+  likeCount: number;
   prototypeUrl: Nullable<string>;
   githubUrl: Nullable<string>;
   websiteUrl: Nullable<string>;
@@ -102,8 +108,9 @@ export interface PublicIdeaDetail {
 export interface PublicIdeaFilters {
   search?: string;
   categoryId?: string;
-  stage?: IdeaStage;
   city?: string;
+  supportType?: SupportType;
+  sort?: PublicIdeaSort;
 }
 
 export interface IdeaDetail extends Idea {

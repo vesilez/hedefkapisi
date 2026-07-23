@@ -13,6 +13,7 @@ import {
   type IdeaFormInput,
 } from "@/lib/validations/idea-schema";
 import { slugify } from "@/lib/utils/slugify";
+import { filterAndSortIdeas } from "@/services/idea-filter-service";
 import {
   createNotification,
   notifyAllAdmins,
@@ -107,6 +108,8 @@ const ideaDocumentSchema = z.object({
   isFeatured: z.boolean(),
   viewCount: z.number(),
   supportCount: z.number(),
+  likeCount: z.number().int().nonnegative().optional().default(0),
+  commentCount: z.number().int().nonnegative().optional().default(0),
   coverImageUrl: z.string().nullable(),
   attachmentUrls: z.array(z.string()),
   prototypeUrl: z.string().nullable(),
@@ -131,6 +134,8 @@ const ideaListItemSchema = z.object({
   visibility: z.enum(["public", "anonymous"]),
   isFeatured: z.boolean(),
   supportCount: z.number(),
+  likeCount: z.number().int().nonnegative().optional().default(0),
+  commentCount: z.number().int().nonnegative().optional().default(0),
   coverImageUrl: z.string().nullable(),
   createdAt: timestampSchema,
 });
@@ -284,6 +289,8 @@ export async function createIdea(
       isFeatured: false,
       viewCount: 0,
       supportCount: 0,
+      likeCount: 0,
+      commentCount: 0,
       publishedAt: null,
       moderatedBy: null,
       moderatedAt: null,
@@ -505,46 +512,52 @@ export async function getPublicIdeas(
   filters: PublicIdeaFilters = {},
 ): Promise<IdeaServiceResult<IdeaListItem[]>> {
   try {
-    const snapshots = await getDocs(
-      query(
-        collection(db, "ideas"),
-        where("status", "==", "approved"),
-        limit(24),
+    const [snapshots, comments] = await Promise.all([
+      getDocs(
+        query(
+          collection(db, "ideas"),
+          where("status", "==", "approved"),
+        ),
       ),
-    );
+      getDocs(
+        query(
+          collection(db, "comments"),
+          where("status", "==", "active"),
+        ),
+      ),
+    ]);
 
     const ideas: IdeaListItem[] = [];
+    const commentCounts = new Map<string, number>();
+    for (const comment of comments.docs) {
+      const ideaId: unknown = comment.data().ideaId;
+      if (typeof ideaId !== "string") continue;
+      commentCounts.set(ideaId, (commentCounts.get(ideaId) ?? 0) + 1);
+    }
+
     for (const snapshot of snapshots.docs) {
       if (snapshot.data().visibility === "private") continue;
 
-      const parsed = ideaListItemSchema.safeParse(snapshot.data());
+      const parsed = ideaListItemSchema.safeParse({
+        ...snapshot.data(),
+        commentCount: commentCounts.get(snapshot.id) ?? 0,
+      });
       if (!parsed.success) {
         return validationFailure("Hayal verileri okunamadı.");
       }
       ideas.push(parsed.data);
     }
 
-    ideas.sort((firstIdea, secondIdea) =>
-      secondIdea.createdAt.localeCompare(firstIdea.createdAt),
-    );
-
-    const search = filters.search?.trim().toLocaleLowerCase("tr-TR");
-    const city = filters.city?.trim().toLocaleLowerCase("tr-TR");
-    const filteredIdeas = ideas.filter((idea) => {
-      const matchesSearch =
-        !search ||
-        idea.title.toLocaleLowerCase("tr-TR").includes(search) ||
-        idea.shortDescription.toLocaleLowerCase("tr-TR").includes(search);
-      const matchesCategory =
-        !filters.categoryId || idea.categoryId === filters.categoryId;
-      const matchesStage = !filters.stage || idea.stage === filters.stage;
-      const matchesCity =
-        !city || idea.city?.toLocaleLowerCase("tr-TR").includes(city);
-
-      return matchesSearch && matchesCategory && matchesStage && matchesCity;
-    });
-
-    return { success: true, data: filteredIdeas };
+    return {
+      success: true,
+      data: filterAndSortIdeas(ideas, {
+        search: filters.search ?? "",
+        categoryId: filters.categoryId ?? "",
+        city: filters.city ?? "",
+        supportType: filters.supportType ?? "",
+        sort: filters.sort ?? "newest",
+      }),
+    };
   } catch (error: unknown) {
     logDevelopmentError("getPublicIdeas", error);
     return failure(error);

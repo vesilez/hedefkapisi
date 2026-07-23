@@ -8,6 +8,7 @@ import { IDEA_STAGE_LABELS } from "@/constants/idea-stages";
 import { SUPPORT_TYPE_LABELS } from "@/constants/support-types";
 import type { PublicIdeaDetail } from "@/types/idea";
 import { IdeaComments } from "./idea-comments";
+import { IdeaEngagement } from "./idea-engagement";
 import { CalendarDays, ExternalLink, HeartHandshake, MapPin, Star, UserRoundX } from "lucide-react";
 
 function formatDate(value: string): string {
@@ -50,6 +51,10 @@ export function IdeaDetail({ idea }: { idea: PublicIdeaDetail }) {
           <span className="inline-flex items-center gap-1.5"><CalendarDays className="size-4" aria-hidden="true" />{formatDate(idea.publishedAt ?? idea.createdAt)}</span>
           {idea.visibility === "anonymous" && <span className="inline-flex items-center gap-1.5 font-medium"><UserRoundX className="size-4" aria-hidden="true" />Öğrenci adı gizli</span>}
         </div>
+        <IdeaEngagement
+          ideaId={idea.id}
+          initialLikeCount={idea.likeCount}
+        />
       </header>
 
       <Card className="mt-9 grid gap-8 p-6 sm:p-8">

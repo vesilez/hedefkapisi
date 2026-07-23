@@ -4,7 +4,7 @@ import { DEFAULT_CATEGORIES } from "@/constants/default-categories";
 import { IDEA_STAGE_LABELS } from "@/constants/idea-stages";
 import { SUPPORT_TYPE_LABELS } from "@/constants/support-types";
 import type { IdeaListItem } from "@/types/idea";
-import { HeartHandshake, MapPin } from "lucide-react";
+import { Heart, HeartHandshake, MapPin } from "lucide-react";
 import Link from "next/link";
 
 export function IdeaCard({ idea }: { idea: IdeaListItem }) {
@@ -44,6 +44,10 @@ export function IdeaCard({ idea }: { idea: IdeaListItem }) {
         <span className="inline-flex items-center gap-1.5">
           <HeartHandshake className="size-4" aria-hidden="true" />
           {idea.supportCount} destek
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <Heart className="size-4" aria-hidden="true" />
+          {idea.likeCount} beğeni
         </span>
       </div>
 

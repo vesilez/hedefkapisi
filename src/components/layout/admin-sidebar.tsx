@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { adminNavigation } from "@/config/navigation";
 import { siteConfig } from "@/config/site";
+import { ThemeToggle } from "./theme-toggle";
 
 export function AdminSidebar() {
   return (
@@ -11,6 +12,9 @@ export function AdminSidebar() {
       <p className="mt-1 text-xs font-medium uppercase tracking-widest text-blue-300">
         Yönetim
       </p>
+      <div className="mt-4">
+        <ThemeToggle />
+      </div>
       <nav
         aria-label="Yönetim menüsü"
         className="mt-6 flex gap-2 overflow-x-auto md:grid"

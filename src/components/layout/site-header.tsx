@@ -11,6 +11,7 @@ import { getUserAccessProfile } from "@/services/user-service";
 import type { UserRole } from "@/constants/roles";
 import { PageContainer } from "./page-container";
 import { NotificationBell } from "./notification-bell";
+import { ThemeToggle } from "./theme-toggle";
 
 export function SiteHeader() {
   const router = useRouter();
@@ -75,11 +76,10 @@ export function SiteHeader() {
             <NotificationBell userId={user.id} />
           </div>
         )}
-        <div
-          className={`hidden items-center gap-2 lg:flex ${
-            !user ? "ml-auto" : ""
-          }`}
-        >
+        <div className={user ? "" : "ml-auto"}>
+          <ThemeToggle compact />
+        </div>
+        <div className="hidden items-center gap-2 lg:flex">
           {!loading &&
             (user ? (
               <>
@@ -97,6 +97,12 @@ export function SiteHeader() {
                   className="rounded-xl px-4 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-50"
                 >
                   Profilim
+                </Link>
+                <Link
+                  href="/favorilerim"
+                  className="rounded-xl px-4 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-50"
+                >
+                  Favorilerim
                 </Link>
                 <button
                   type="button"
@@ -162,6 +168,12 @@ export function SiteHeader() {
                     className="rounded-lg px-3 py-2 text-sm font-semibold text-blue-800"
                   >
                     Profilim
+                  </Link>
+                  <Link
+                    href="/favorilerim"
+                    className="rounded-lg px-3 py-2 text-sm font-semibold text-blue-800"
+                  >
+                    Favorilerim
                   </Link>
                   <button
                     type="button"

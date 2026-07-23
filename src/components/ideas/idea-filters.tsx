@@ -3,17 +3,12 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { DEFAULT_CATEGORIES } from "@/constants/default-categories";
 import {
-  IDEA_STAGES,
-  IDEA_STAGE_LABELS,
-  type IdeaStage,
-} from "@/constants/idea-stages";
+  SUPPORT_TYPES,
+  SUPPORT_TYPE_LABELS,
+} from "@/constants/support-types";
+import type { IdeaFilterValues } from "@/services/idea-filter-service";
 
-export interface IdeaFilterValues {
-  search: string;
-  categoryId: string;
-  stage: IdeaStage | "";
-  city: string;
-}
+export type { IdeaFilterValues } from "@/services/idea-filter-service";
 
 interface IdeaFiltersProps {
   values: IdeaFilterValues;
@@ -24,7 +19,7 @@ interface IdeaFiltersProps {
 export function IdeaFilters({ values, onChange, onClear }: IdeaFiltersProps) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <div>
           <label
             htmlFor="idea-search"
@@ -68,32 +63,6 @@ export function IdeaFilters({ values, onChange, onClear }: IdeaFiltersProps) {
         </div>
         <div>
           <label
-            htmlFor="idea-stage"
-            className="text-sm font-semibold text-slate-800"
-          >
-            Fikir aşaması
-          </label>
-          <Select
-            id="idea-stage"
-            className="mt-2"
-            value={values.stage}
-            onChange={(event) =>
-              onChange({
-                ...values,
-                stage: event.target.value as IdeaStage | "",
-              })
-            }
-          >
-            <option value="">Tüm aşamalar</option>
-            {IDEA_STAGES.map((stage) => (
-              <option key={stage} value={stage}>
-                {IDEA_STAGE_LABELS[stage]}
-              </option>
-            ))}
-          </Select>
-        </div>
-        <div>
-          <label
             htmlFor="idea-city"
             className="text-sm font-semibold text-slate-800"
           >
@@ -108,6 +77,56 @@ export function IdeaFilters({ values, onChange, onClear }: IdeaFiltersProps) {
               onChange({ ...values, city: event.target.value })
             }
           />
+        </div>
+        <div>
+          <label
+            htmlFor="idea-support-type"
+            className="text-sm font-semibold text-slate-800"
+          >
+            Destek türü
+          </label>
+          <Select
+            id="idea-support-type"
+            className="mt-2"
+            value={values.supportType}
+            onChange={(event) =>
+              onChange({
+                ...values,
+                supportType: event.target.value as IdeaFilterValues["supportType"],
+              })
+            }
+          >
+            <option value="">Tüm destek türleri</option>
+            {SUPPORT_TYPES.map((supportType) => (
+              <option key={supportType} value={supportType}>
+                {SUPPORT_TYPE_LABELS[supportType]}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <div>
+          <label
+            htmlFor="idea-sort"
+            className="text-sm font-semibold text-slate-800"
+          >
+            Sıralama
+          </label>
+          <Select
+            id="idea-sort"
+            className="mt-2"
+            value={values.sort}
+            onChange={(event) =>
+              onChange({
+                ...values,
+                sort: event.target.value as IdeaFilterValues["sort"],
+              })
+            }
+          >
+            <option value="newest">En yeni</option>
+            <option value="oldest">En eski</option>
+            <option value="most_liked">En çok beğenilen</option>
+            <option value="most_commented">En çok yorumlanan</option>
+          </Select>
         </div>
       </div>
       <div className="mt-4 flex justify-end">
