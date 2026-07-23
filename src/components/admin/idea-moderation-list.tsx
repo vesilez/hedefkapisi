@@ -1,22 +1,32 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { DEFAULT_CATEGORIES } from "@/constants/default-categories";
+import {
+  IDEA_STATUS_LABELS,
+  type IdeaStatus,
+} from "@/constants/idea-statuses";
 import { isAdminRole } from "@/constants/roles";
 import { useAuth } from "@/hooks/use-auth";
-import { getPendingIdeas } from "@/services/idea-service";
+import {
+  approveIdea,
+  deleteAdminIdea,
+  getAdminIdeas,
+  rejectAdminIdea,
+  type AdminIdeaListItem,
+} from "@/services/idea-service";
 import {
   getUserAccessProfile,
   subscribeToUserAccessProfile,
   type UserServiceResult,
   type UserAccessProfile,
 } from "@/services/user-service";
-import type { Idea } from "@/types/idea";
-import { ClipboardCheck } from "lucide-react";
+import { Lightbulb, LoaderCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { IdeaModerationCard } from "./idea-moderation-card";
 
 type ViewState =
   | "loading"
@@ -25,33 +35,16 @@ type ViewState =
   | "profile-error"
   | "ideas-error";
 
-interface AccessDiagnosticsProps {
-  uid: string | null;
-  profileFound: boolean | null;
-  role: string | null;
-  loading: boolean;
-  error: string | null;
+type IdeaAction = "approve" | "reject" | "delete";
+
+interface ActiveAction {
+  ideaId: string;
+  action: IdeaAction;
 }
 
-function AccessDiagnostics(props: AccessDiagnosticsProps) {
-  if (process.env.NODE_ENV !== "development") return null;
-
-  return (
-    <dl className="mb-5 grid gap-1 rounded-xl border border-amber-300 bg-amber-50 p-4 font-mono text-xs text-amber-950">
-      <div>auth user uid: {props.uid ?? "yok"}</div>
-      <div>
-        kullanıcı profili bulundu mu:{" "}
-        {props.profileFound === null
-          ? "henüz bilinmiyor"
-          : props.profileFound
-            ? "evet"
-            : "hayır"}
-      </div>
-      <div>Firestore role: {props.role ?? "okunmadı"}</div>
-      <div>profile loading: {props.loading ? "true" : "false"}</div>
-      <div>profile error: {props.error ?? "yok"}</div>
-    </dl>
-  );
+interface Feedback {
+  type: "success" | "error";
+  message: string;
 }
 
 export function IdeaModerationList() {
@@ -59,17 +52,12 @@ export function IdeaModerationList() {
   const { user, loading: authLoading } = useAuth();
   const [state, setState] = useState<ViewState>("loading");
   const [accessUserId, setAccessUserId] = useState<string | null>(null);
-  const [profileFound, setProfileFound] = useState<boolean | null>(null);
-  const [profileRole, setProfileRole] = useState<string | null>(null);
-  const [profileLoading, setProfileLoading] = useState(true);
-  const [profileError, setProfileError] = useState<string | null>(null);
-  const [ideas, setIdeas] = useState<Idea[]>([]);
-  const [feedback, setFeedback] = useState<string | null>(null);
+  const [ideas, setIdeas] = useState<AdminIdeaListItem[]>([]);
+  const [activeAction, setActiveAction] = useState<ActiveAction | null>(null);
+  const [feedback, setFeedback] = useState<Feedback | null>(null);
 
   async function loadAdminIdeas(userId: string) {
     setState("loading");
-    setProfileLoading(true);
-    setProfileError(null);
     const profileResult = await getUserAccessProfile(userId);
 
     await applyAccessProfile(userId, profileResult);
@@ -81,19 +69,11 @@ export function IdeaModerationList() {
   ) {
     setState("loading");
     setAccessUserId(userId);
-    setProfileLoading(false);
 
     if (!profileResult.success) {
-      setProfileFound(null);
-      setProfileRole(null);
-      setProfileError(profileResult.error.message);
       setState("profile-error");
       return;
     }
-
-    setProfileFound(profileResult.data !== null);
-    setProfileRole(profileResult.data?.role ?? null);
-    setProfileError(null);
 
     if (!profileResult.data) {
       setState("profile-error");
@@ -105,7 +85,7 @@ export function IdeaModerationList() {
       return;
     }
 
-    const ideasResult = await getPendingIdeas();
+    const ideasResult = await getAdminIdeas(userId);
     if (ideasResult.success) {
       setIdeas(ideasResult.data);
       setState("ready");
@@ -139,29 +119,70 @@ export function IdeaModerationList() {
 
   async function retry() {
     if (!user) return;
+    setFeedback(null);
     await loadAdminIdeas(user.id);
   }
 
-  function removeModeratedIdea(ideaId: string, message: string) {
-    setIdeas((currentIdeas) =>
-      currentIdeas.filter((idea) => idea.id !== ideaId),
-    );
-    setFeedback(message);
+  async function updateIdeaStatus(
+    ideaId: string,
+    action: "approve" | "reject",
+  ) {
+    if (!user || activeAction) return;
+
+    setActiveAction({ ideaId, action });
+    setFeedback(null);
+    const result =
+      action === "approve"
+        ? await approveIdea(ideaId, user.id)
+        : await rejectAdminIdea(ideaId, user.id);
+
+    if (result.success) {
+      const status = action === "approve" ? "approved" : "rejected";
+      setIdeas((currentIdeas) =>
+        currentIdeas.map((item) =>
+          item.idea.id === ideaId
+            ? { ...item, idea: { ...item.idea, status } }
+            : item,
+        ),
+      );
+      setFeedback({
+        type: "success",
+        message:
+          action === "approve"
+            ? "Hayal başarıyla onaylandı."
+            : "Hayal başarıyla reddedildi.",
+      });
+    } else {
+      setFeedback({ type: "error", message: result.error.message });
+    }
+
+    setActiveAction(null);
   }
 
-  const diagnostics = (
-    <AccessDiagnostics
-      uid={user?.id ?? null}
-      profileFound={profileFound}
-      role={profileRole}
-      loading={
-        authLoading ||
-        profileLoading ||
-        (user !== null && accessUserId !== user.id)
-      }
-      error={profileError}
-    />
-  );
+  async function deleteIdea(ideaId: string) {
+    if (!user || activeAction) return;
+    if (!window.confirm("Bu hayali kalıcı olarak silmek istediğine emin misin?")) {
+      return;
+    }
+
+    setActiveAction({ ideaId, action: "delete" });
+    setFeedback(null);
+    const result = await deleteAdminIdea(ideaId, user.id);
+
+    if (result.success) {
+      setIdeas((currentIdeas) =>
+        currentIdeas.filter((item) => item.idea.id !== ideaId),
+      );
+      setFeedback({
+        type: "success",
+        message: "Hayal başarıyla silindi.",
+      });
+    } else {
+      setFeedback({ type: "error", message: result.error.message });
+    }
+
+    setActiveAction(null);
+  }
 
   if (
     authLoading ||
@@ -169,11 +190,8 @@ export function IdeaModerationList() {
     (user !== null && accessUserId !== user.id)
   ) {
     return (
-      <div>
-        {diagnostics}
-        <div className="flex min-h-52 items-center justify-center rounded-2xl bg-white">
-          <LoadingSpinner label="Fikirler yükleniyor..." />
-        </div>
+      <div className="flex min-h-52 items-center justify-center rounded-2xl bg-white">
+        <LoadingSpinner label="Fikirler yükleniyor..." />
       </div>
     );
   }
@@ -182,74 +200,68 @@ export function IdeaModerationList() {
 
   if (state === "forbidden") {
     return (
-      <div>
-        {diagnostics}
-        <div
-          className="rounded-2xl border border-red-200 bg-red-50 p-6 text-red-800"
-          role="alert"
-        >
-          Bu alana erişim yetkin yok.
-        </div>
+      <div
+        className="rounded-2xl border border-red-200 bg-red-50 p-6 text-red-800"
+        role="alert"
+      >
+        Bu alana erişim yetkin yok.
       </div>
     );
   }
 
   if (state === "profile-error") {
     return (
-      <div>
-        {diagnostics}
-        <div
-          className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center"
-          role="alert"
-        >
-          <p className="font-semibold text-red-800">
-            Kullanıcı profili yüklenemedi.
-          </p>
-          <Button type="button" className="mt-4" onClick={() => void retry()}>
-            Tekrar Dene
-          </Button>
-        </div>
+      <div
+        className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center"
+        role="alert"
+      >
+        <p className="font-semibold text-red-800">
+          Kullanıcı profili yüklenemedi.
+        </p>
+        <Button type="button" className="mt-4" onClick={() => void retry()}>
+          Tekrar Dene
+        </Button>
       </div>
     );
   }
 
   if (state === "ideas-error") {
     return (
-      <div>
-        {diagnostics}
-        <div
-          className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center"
-          role="alert"
-        >
-          <p className="font-semibold text-red-800">
-            Fikirler şu anda yüklenemiyor.
-          </p>
-          <Button type="button" className="mt-4" onClick={() => void retry()}>
-            Tekrar Dene
-          </Button>
-        </div>
+      <div
+        className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center"
+        role="alert"
+      >
+        <p className="font-semibold text-red-800">
+          Fikirler şu anda yüklenemiyor.
+        </p>
+        <Button type="button" className="mt-4" onClick={() => void retry()}>
+          Tekrar Dene
+        </Button>
       </div>
     );
   }
 
   return (
     <div>
-      {diagnostics}
       {feedback && (
         <p
-          className="mb-5 rounded-xl bg-emerald-50 p-4 font-semibold text-emerald-800"
-          role="status"
+          className={
+            feedback.type === "success"
+              ? "mb-5 rounded-xl bg-emerald-50 p-4 font-semibold text-emerald-800"
+              : "mb-5 rounded-xl bg-red-50 p-4 font-semibold text-red-800"
+          }
+          role={feedback.type === "error" ? "alert" : "status"}
           aria-live="polite"
         >
-          {feedback}
+          {feedback.message}
         </p>
       )}
       {ideas.length === 0 ? (
         <div>
           <EmptyState
-            title="Onay bekleyen fikir yok"
-            description="Yeni gönderilen fikirler burada görüntülenecek."
-            icon={ClipboardCheck}
+            title="Henüz hayal yok"
+            description="Paylaşılan hayaller burada görüntülenecek."
+            icon={Lightbulb}
           />
           <div className="mt-4 text-center">
             <Button
@@ -262,17 +274,138 @@ export function IdeaModerationList() {
           </div>
         </div>
       ) : (
-        <div className="grid gap-6">
-          {ideas.map((idea) => (
-            <IdeaModerationCard
-              key={idea.id}
-              idea={idea}
-              adminId={user.id}
-              onModerated={removeModeratedIdea}
-            />
-          ))}
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-4xl border-collapse text-left">
+              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
+                <tr>
+                  <th scope="col" className="px-5 py-4 font-semibold">
+                    Başlık
+                  </th>
+                  <th scope="col" className="px-5 py-4 font-semibold">
+                    Kullanıcı
+                  </th>
+                  <th scope="col" className="px-5 py-4 font-semibold">
+                    Kategori
+                  </th>
+                  <th scope="col" className="px-5 py-4 font-semibold">
+                    Durum
+                  </th>
+                  <th scope="col" className="px-5 py-4 font-semibold">
+                    Oluşturulma
+                  </th>
+                  <th scope="col" className="px-5 py-4 font-semibold">
+                    İşlemler
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {ideas.map(({ idea, userName }) => (
+                  <tr
+                    key={idea.id}
+                    className="transition-colors hover:bg-slate-50"
+                  >
+                    <td className="max-w-sm px-5 py-4">
+                      <p className="font-semibold text-slate-950">
+                        {idea.title}
+                      </p>
+                    </td>
+                    <td className="whitespace-nowrap px-5 py-4 text-sm text-slate-700">
+                      {userName}
+                    </td>
+                    <td className="px-5 py-4 text-sm text-slate-700">
+                      {DEFAULT_CATEGORIES.find(
+                        (category) => category.id === idea.categoryId,
+                      )?.label ?? "Diğer"}
+                    </td>
+                    <td className="whitespace-nowrap px-5 py-4">
+                      <IdeaStatusBadge status={idea.status} />
+                    </td>
+                    <td className="whitespace-nowrap px-5 py-4 text-sm text-slate-600">
+                      {new Intl.DateTimeFormat("tr-TR", {
+                        dateStyle: "medium",
+                      }).format(new Date(idea.createdAt))}
+                    </td>
+                    <td className="whitespace-nowrap px-5 py-4">
+                      <div className="flex items-center gap-2">
+                        {idea.status === "pending" && (
+                          <>
+                            <Button
+                              className="min-h-9 px-3 py-1.5 text-xs"
+                              disabled={activeAction?.ideaId === idea.id}
+                              onClick={() =>
+                                void updateIdeaStatus(idea.id, "approve")
+                              }
+                            >
+                              {activeAction?.ideaId === idea.id &&
+                                activeAction.action === "approve" && (
+                                  <LoaderCircle
+                                    aria-hidden="true"
+                                    className="mr-1.5 size-4 animate-spin"
+                                  />
+                                )}
+                              Onayla
+                            </Button>
+                            <Button
+                              variant="secondary"
+                              className="min-h-9 border-red-200 px-3 py-1.5 text-xs text-red-700 hover:bg-red-50"
+                              disabled={activeAction?.ideaId === idea.id}
+                              onClick={() =>
+                                void updateIdeaStatus(idea.id, "reject")
+                              }
+                            >
+                              {activeAction?.ideaId === idea.id &&
+                                activeAction.action === "reject" && (
+                                  <LoaderCircle
+                                    aria-hidden="true"
+                                    className="mr-1.5 size-4 animate-spin"
+                                  />
+                                )}
+                              Reddet
+                            </Button>
+                          </>
+                        )}
+                        <Button
+                          variant="ghost"
+                          className="min-h-9 px-3 py-1.5 text-xs text-red-700 hover:bg-red-50"
+                          disabled={activeAction?.ideaId === idea.id}
+                          onClick={() => void deleteIdea(idea.id)}
+                        >
+                          {activeAction?.ideaId === idea.id &&
+                            activeAction.action === "delete" && (
+                              <LoaderCircle
+                                aria-hidden="true"
+                                className="mr-1.5 size-4 animate-spin"
+                              />
+                            )}
+                          Sil
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>
+  );
+}
+
+const STATUS_BADGE_CLASSES = {
+  draft: "bg-slate-100 text-slate-700",
+  pending: "bg-amber-100 text-amber-800",
+  approved: "bg-emerald-100 text-emerald-800",
+  rejected: "bg-red-100 text-red-800",
+  revision_requested: "bg-violet-100 text-violet-800",
+  archived: "bg-zinc-200 text-zinc-700",
+} as const satisfies Record<IdeaStatus, string>;
+
+function IdeaStatusBadge({ status }: { status: IdeaStatus }) {
+  return (
+    <Badge className={STATUS_BADGE_CLASSES[status]}>
+      {IDEA_STATUS_LABELS[status]}
+    </Badge>
   );
 }

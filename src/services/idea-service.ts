@@ -22,6 +22,7 @@ import {
 } from "@/types/idea";
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocFromServer,
@@ -44,6 +45,11 @@ export type IdeaServiceResult<T> =
 
 export interface IdeaMutationInput extends IdeaFormInput {
   submitAction: IdeaSubmitAction;
+}
+
+export interface AdminIdeaListItem {
+  idea: Idea;
+  userName: string;
 }
 
 const timestampSchema = z.unknown().transform((value, context) => {
@@ -549,6 +555,66 @@ export async function getPendingIdeas(): Promise<IdeaServiceResult<Idea[]>> {
   }
 }
 
+export async function getAdminIdeas(
+  adminId: string,
+): Promise<IdeaServiceResult<AdminIdeaListItem[]>> {
+  const authorization = await ensureAdmin(adminId);
+  if (!authorization.success) return authorization;
+
+  try {
+    const snapshots = await getDocsFromServer(collection(db, "ideas"));
+    const ideas: Idea[] = [];
+
+    for (const snapshot of snapshots.docs) {
+      const data: unknown = snapshot.data();
+      const parsed = ideaDocumentSchema.safeParse({
+        ...(typeof data === "object" && data !== null ? data : {}),
+        id: snapshot.id,
+      });
+      if (!parsed.success) {
+        return validationFailure("Hayal verileri okunamadı.");
+      }
+      ideas.push(parsed.data);
+    }
+
+    const studentIds = [...new Set(ideas.map((idea) => idea.studentId))];
+    const userNames = new Map<string, string>();
+    await Promise.all(
+      studentIds.map(async (studentId) => {
+        const profile = await getDocFromServer(doc(db, "users", studentId));
+        if (!profile.exists()) return;
+
+        const name: unknown = profile.data().name;
+        const surname: unknown = profile.data().surname;
+        const fullName = [name, surname]
+          .filter(
+            (value): value is string =>
+              typeof value === "string" && value.trim().length > 0,
+          )
+          .map((value) => value.trim())
+          .join(" ");
+
+        if (fullName) userNames.set(studentId, fullName);
+      }),
+    );
+
+    ideas.sort((firstIdea, secondIdea) =>
+      secondIdea.createdAt.localeCompare(firstIdea.createdAt),
+    );
+
+    return {
+      success: true,
+      data: ideas.map((idea) => ({
+        idea,
+        userName: userNames.get(idea.studentId) ?? "Kullanıcı bulunamadı",
+      })),
+    };
+  } catch (error: unknown) {
+    logDevelopmentError("getAdminIdeas", error);
+    return failure(error);
+  }
+}
+
 async function moderateIdea(
   ideaId: string,
   adminId: string,
@@ -599,6 +665,34 @@ export async function approveIdea(
     revisionNote: null,
     publishedAt: serverTimestamp(),
   });
+}
+
+export async function rejectAdminIdea(
+  ideaId: string,
+  adminId: string,
+): Promise<IdeaServiceResult<void>> {
+  return moderateIdea(ideaId, adminId, {
+    status: "rejected",
+    adminNote: "",
+    rejectionReason: "Yönetici tarafından reddedildi.",
+    revisionNote: null,
+    publishedAt: null,
+  });
+}
+
+export async function deleteAdminIdea(
+  ideaId: string,
+  adminId: string,
+): Promise<IdeaServiceResult<void>> {
+  const authorization = await ensureAdmin(adminId);
+  if (!authorization.success) return authorization;
+
+  try {
+    await deleteDoc(doc(db, "ideas", ideaId));
+    return { success: true, data: undefined };
+  } catch (error: unknown) {
+    return failure(error);
+  }
 }
 
 export async function rejectIdea(

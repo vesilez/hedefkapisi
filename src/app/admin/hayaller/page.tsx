@@ -2,8 +2,8 @@ import { IdeaModerationList } from "@/components/admin";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: { absolute: "Fikir Moderasyonu | Hedef Kapısı" },
-  description: "Onay bekleyen öğrenci fikirlerini incele ve yönet.",
+  title: { absolute: "Hayaller | Hedef Kapısı" },
+  description: "Platformda paylaşılan tüm hayalleri görüntüle.",
 };
 
 export default function AdminIdeasPage() {
@@ -11,10 +11,10 @@ export default function AdminIdeasPage() {
     <section>
       <div className="mb-8 max-w-3xl">
         <h1 className="text-3xl font-extrabold tracking-tight text-slate-950 sm:text-4xl">
-          Fikir Moderasyonu
+          Hayaller
         </h1>
         <p className="mt-3 leading-7 text-slate-600">
-          Onay bekleyen öğrenci fikirlerini incele ve yayın durumunu yönet.
+          Platformda paylaşılan tüm hayalleri ve güncel durumlarını görüntüle.
         </p>
       </div>
       <IdeaModerationList />

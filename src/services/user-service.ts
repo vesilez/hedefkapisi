@@ -1,8 +1,17 @@
 import "client-only";
 
-import { isUserRole, USER_ROLES, type UserRole } from "@/constants/roles";
+import {
+  isAdminRole,
+  isUserRole,
+  USER_ROLES,
+  type UserRole,
+} from "@/constants/roles";
 import { SUPPORT_TYPES } from "@/constants/support-types";
-import { USER_STATUSES } from "@/constants/user-statuses";
+import {
+  USER_STATUSES,
+  type UserStatus,
+} from "@/constants/user-statuses";
+import { auth } from "@/lib/firebase/auth";
 import { db } from "@/lib/firebase/firestore";
 import {
   getFirebaseErrorCode,
@@ -19,15 +28,18 @@ import {
   SCHOOL_TYPES,
   SUPPORTER_TYPES,
   type UserWithProfiles,
+  type BaseUser,
   type CreateUserDocumentInput,
   type UpdateUserProfileInput,
 } from "@/types/user";
 import {
   type DocumentData,
   type DocumentSnapshot,
+  collection,
   doc,
   getDoc,
   getDocFromServer,
+  getDocsFromServer,
   onSnapshot,
   serverTimestamp,
   setDoc,
@@ -52,6 +64,11 @@ export interface UserAccessProfile {
   id: string;
   role: UserRole;
 }
+
+export type AdminUserListItem = Pick<
+  BaseUser,
+  "id" | "name" | "surname" | "email" | "role" | "status" | "createdAt"
+>;
 
 export type UserAccessProfileListener = (
   result: UserServiceResult<UserAccessProfile | null>,
@@ -163,6 +180,19 @@ const userProfileDocumentSchema = z.object({
     .default(null),
 });
 
+const adminUserListDocumentSchema = z.object({
+  id: z.string().min(1),
+  role: z.enum(USER_ROLES),
+  name: z.string(),
+  surname: z.string(),
+  email: z.string(),
+  status: z.preprocess(
+    (value) => (value === "approved" ? "active" : value),
+    z.enum(USER_STATUSES),
+  ),
+  createdAt: firestoreTimestampSchema,
+});
+
 function failure(error: unknown): UserServiceFailure {
   return {
     success: false,
@@ -207,6 +237,186 @@ function mapUserAccessSnapshot(
   }
 
   return { success: true, data: { id: snapshot.id, role } };
+}
+
+async function ensureAdminUser(
+  adminId: string,
+): Promise<UserServiceResult<void>> {
+  if (!adminId || auth.currentUser?.uid !== adminId) {
+    return {
+      success: false,
+      error: {
+        code: "user/unauthorized",
+        message: "Bu işlem için yetkiniz yok.",
+      },
+    };
+  }
+
+  try {
+    const profile = await getDoc(doc(db, "users", adminId));
+    const role: unknown = profile.exists() ? profile.data().role : null;
+    if (!isAdminRole(role)) {
+      return {
+        success: false,
+        error: {
+          code: "user/unauthorized",
+          message: "Bu işlem için yetkiniz yok.",
+        },
+      };
+    }
+
+    return { success: true, data: undefined };
+  } catch (error: unknown) {
+    return failure(error);
+  }
+}
+
+export async function getAdminUsers(
+  adminId: string,
+): Promise<UserServiceResult<AdminUserListItem[]>> {
+  const authorization = await ensureAdminUser(adminId);
+  if (!authorization.success) return authorization;
+
+  try {
+    const snapshots = await getDocsFromServer(collection(db, "users"));
+    const users: AdminUserListItem[] = [];
+
+    for (const snapshot of snapshots.docs) {
+      const data: unknown = snapshot.data();
+      const parsed = adminUserListDocumentSchema.safeParse({
+        ...(typeof data === "object" && data !== null ? data : {}),
+        id: snapshot.id,
+      });
+      if (!parsed.success) {
+        console.error("[user-service:getAdminUsers] invalid user document", {
+          documentId: snapshot.id,
+          role: snapshot.data().role,
+          status: snapshot.data().status,
+          issues: parsed.error.issues.map((issue) => ({
+            path: issue.path.join("."),
+            code: issue.code,
+            message: issue.message,
+          })),
+        });
+        return {
+          success: false,
+          error: {
+            code: "firestore/invalid-user-profile",
+            message: "Kullanıcı verileri okunamadı.",
+          },
+        };
+      }
+
+      const { id, name, surname, email, role, status, createdAt } = parsed.data;
+      users.push({ id, name, surname, email, role, status, createdAt });
+    }
+
+    users.sort((firstUser, secondUser) =>
+      secondUser.createdAt.localeCompare(firstUser.createdAt),
+    );
+    return { success: true, data: users };
+  } catch (error: unknown) {
+    return failure(error);
+  }
+}
+
+export async function updateUserRoleAsAdmin(
+  adminId: string,
+  userId: string,
+  role: UserRole,
+): Promise<UserServiceResult<void>> {
+  if (adminId === userId) {
+    return {
+      success: false,
+      error: {
+        code: "user/self-role-change-not-allowed",
+        message: "Kendi rolünüzü değiştiremezsiniz.",
+      },
+    };
+  }
+  if (!isUserRole(role)) {
+    return {
+      success: false,
+      error: { code: "user/invalid-role", message: "Geçersiz kullanıcı rolü." },
+    };
+  }
+
+  const authorization = await ensureAdminUser(adminId);
+  if (!authorization.success) return authorization;
+
+  try {
+    const reference = doc(db, "users", userId);
+    const target = await getDocFromServer(reference);
+    if (!target.exists()) {
+      return {
+        success: false,
+        error: {
+          code: "user/not-found",
+          message: "Kullanıcı bulunamadı.",
+        },
+      };
+    }
+
+    await setDoc(
+      reference,
+      { role, updatedAt: serverTimestamp() },
+      { merge: true },
+    );
+    return { success: true, data: undefined };
+  } catch (error: unknown) {
+    return failure(error);
+  }
+}
+
+export async function updateUserStatusAsAdmin(
+  adminId: string,
+  userId: string,
+  status: Extract<UserStatus, "active" | "suspended">,
+): Promise<UserServiceResult<void>> {
+  if (adminId === userId) {
+    return {
+      success: false,
+      error: {
+        code: "user/self-suspension-not-allowed",
+        message: "Kendi hesabınızın durumunu değiştiremezsiniz.",
+      },
+    };
+  }
+  if (status !== "active" && status !== "suspended") {
+    return {
+      success: false,
+      error: {
+        code: "user/invalid-status",
+        message: "Geçersiz kullanıcı durumu.",
+      },
+    };
+  }
+
+  const authorization = await ensureAdminUser(adminId);
+  if (!authorization.success) return authorization;
+
+  try {
+    const reference = doc(db, "users", userId);
+    const target = await getDocFromServer(reference);
+    if (!target.exists()) {
+      return {
+        success: false,
+        error: {
+          code: "user/not-found",
+          message: "Kullanıcı bulunamadı.",
+        },
+      };
+    }
+
+    await setDoc(
+      reference,
+      { status, updatedAt: serverTimestamp() },
+      { merge: true },
+    );
+    return { success: true, data: undefined };
+  } catch (error: unknown) {
+    return failure(error);
+  }
 }
 
 export async function createUserDocument(

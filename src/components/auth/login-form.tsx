@@ -4,12 +4,14 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { isAdminRole } from "@/constants/roles";
 import { useAuth } from "@/hooks/use-auth";
 import {
   loginSchema,
   type LoginFormValues,
 } from "@/lib/validations/auth-schema";
 import { loginWithEmailAndPassword } from "@/services/auth-service";
+import { getUserAccessProfile } from "@/services/user-service";
 import { AlertTriangle, Eye, EyeOff, LoaderCircle } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -18,6 +20,7 @@ import { useForm } from "react-hook-form";
 
 interface LoginSuccessState {
   emailVerified: boolean;
+  redirectPath: "/admin" | "/profil";
 }
 
 export function LoginForm() {
@@ -45,12 +48,12 @@ export function LoginForm() {
     if (!loginSuccess || !user) return;
 
     if (loginSuccess.emailVerified) {
-      router.replace("/profil");
+      router.replace(loginSuccess.redirectPath);
       return;
     }
 
     const redirectTimer = window.setTimeout(() => {
-      router.replace("/profil");
+      router.replace(loginSuccess.redirectPath);
     }, 2200);
 
     return () => window.clearTimeout(redirectTimer);
@@ -67,7 +70,18 @@ export function LoginForm() {
       return;
     }
 
-    setLoginSuccess({ emailVerified: result.data.emailVerified });
+    const profileResult = await getUserAccessProfile(result.data.id);
+    const redirectPath =
+      profileResult.success &&
+      profileResult.data &&
+      isAdminRole(profileResult.data.role)
+        ? "/admin"
+        : "/profil";
+
+    setLoginSuccess({
+      emailVerified: result.data.emailVerified,
+      redirectPath,
+    });
   });
 
   if (loginSuccess) {
@@ -83,7 +97,9 @@ export function LoginForm() {
               Giriş başarılı
             </h2>
             <p className="mt-2 text-slate-600">
-              Profiline yönlendiriliyorsun...
+              {loginSuccess.redirectPath === "/admin"
+                ? "Yönetim paneline yönlendiriliyorsun..."
+                : "Profiline yönlendiriliyorsun..."}
             </p>
           </>
         ) : (
@@ -99,13 +115,17 @@ export function LoginForm() {
               gönderilen bağlantıdan adresini doğrulamanı öneriyoruz.
             </p>
             <p className="mt-3 text-sm font-medium text-slate-700">
-              Profiline yönlendiriliyorsun...
+              {loginSuccess.redirectPath === "/admin"
+                ? "Yönetim paneline yönlendiriliyorsun..."
+                : "Profiline yönlendiriliyorsun..."}
             </p>
             <Link
-              href="/profil"
+              href={loginSuccess.redirectPath}
               className="mt-5 inline-flex min-h-11 items-center justify-center rounded-xl bg-blue-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-800"
             >
-              Şimdi Profile Git
+              {loginSuccess.redirectPath === "/admin"
+                ? "Yönetim Paneline Git"
+                : "Şimdi Profile Git"}
             </Link>
           </>
         )}
