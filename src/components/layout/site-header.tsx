@@ -10,6 +10,7 @@ import { siteConfig } from "@/config/site";
 import { getUserAccessProfile } from "@/services/user-service";
 import type { UserRole } from "@/constants/roles";
 import { PageContainer } from "./page-container";
+import { NotificationBell } from "./notification-bell";
 
 export function SiteHeader() {
   const router = useRouter();
@@ -69,7 +70,16 @@ export function SiteHeader() {
             </Link>
           ))}
         </nav>
-        <div className="hidden items-center gap-2 lg:flex">
+        {!loading && user && (
+          <div className="ml-auto">
+            <NotificationBell userId={user.id} />
+          </div>
+        )}
+        <div
+          className={`hidden items-center gap-2 lg:flex ${
+            !user ? "ml-auto" : ""
+          }`}
+        >
           {!loading &&
             (user ? (
               <>

@@ -7,6 +7,10 @@ import { auth } from "@/lib/firebase/auth";
 import { db } from "@/lib/firebase/firestore";
 import { getFirebaseErrorMessage } from "@/lib/firebase/firebase-error";
 import { createSupportRequestSchema } from "@/lib/validations/support-request-schema";
+import {
+  createNotification,
+  notifyAllAdmins,
+} from "@/services/notification-service";
 import type {
   CreateSupportRequestInput,
   SupportRequest,
@@ -16,6 +20,7 @@ import {
   doc,
   getDoc,
   getDocFromServer,
+  getCountFromServer,
   getDocs,
   getDocsFromServer,
   limit,
@@ -30,6 +35,16 @@ import { z } from "zod";
 export type SupportRequestServiceResult<T> =
   | { success: true; data: T }
   | { success: false; error: { message: string } };
+
+export interface AdminSupportRequestListItem {
+  request: SupportRequest;
+  applicantName: string;
+  applicantEmail: string;
+}
+
+export interface AdminSupportRequestStatistics {
+  pending: number;
+}
 
 const timestampSchema = z.unknown().transform((value, context) => {
   if (
@@ -70,6 +85,13 @@ function failure<T>(error: unknown): SupportRequestServiceResult<T> {
 
 function messageFailure<T>(message: string): SupportRequestServiceResult<T> {
   return { success: false, error: { message } };
+}
+
+function logNotificationError(context: string, message: string): void {
+  console.error(
+    `[support-request-service:${context}] notification failed:`,
+    message,
+  );
 }
 
 function parseRequests(
@@ -185,6 +207,36 @@ export async function createSupportRequest(
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
+
+    const ideaOwnerId: unknown = idea.data().studentId;
+    const ideaTitle: unknown = idea.data().title;
+    if (typeof ideaOwnerId === "string" && ideaOwnerId) {
+      const ownerNotification = await createNotification({
+        userId: ideaOwnerId,
+        title: "Yeni destek başvurusu",
+        message: `"${typeof ideaTitle === "string" ? ideaTitle : "Hayalin"}" için yeni bir destek başvurusu geldi.`,
+        type: "support_request_received",
+      });
+      if (!ownerNotification.success) {
+        logNotificationError(
+          "createSupportRequest:owner",
+          ownerNotification.error.message,
+        );
+      }
+    }
+
+    const adminNotification = await notifyAllAdmins({
+      title: "Yeni destek başvurusu",
+      message: `"${typeof ideaTitle === "string" ? ideaTitle : "Bir hayal"}" için yeni bir destek başvurusu geldi.`,
+      type: "new_support_request",
+    });
+    if (!adminNotification.success) {
+      logNotificationError(
+        "createSupportRequest:admins",
+        adminNotification.error.message,
+      );
+    }
+
     return { success: true, data: { id: reference.id } };
   } catch (error: unknown) {
     return failure(error);
@@ -245,6 +297,90 @@ export async function getPendingSupportRequests(): Promise<
   }
 }
 
+export async function getAdminSupportRequests(
+  adminId: string,
+): Promise<SupportRequestServiceResult<AdminSupportRequestListItem[]>> {
+  const authorization = await ensureAdmin(adminId);
+  if (!authorization.success) return authorization;
+
+  try {
+    const snapshots = await getDocsFromServer(
+      collection(db, "supportRequests"),
+    );
+    const parsedRequests = parseRequests(snapshots);
+    if (!parsedRequests.success) return parsedRequests;
+
+    const supporterIds = [
+      ...new Set(parsedRequests.data.map((request) => request.supporterId)),
+    ];
+    const applicants = new Map<
+      string,
+      { name: string; email: string }
+    >();
+
+    await Promise.all(
+      supporterIds.map(async (supporterId) => {
+        const profile = await getDocFromServer(doc(db, "users", supporterId));
+        if (!profile.exists()) return;
+
+        const rawName: unknown = profile.data().name;
+        const rawSurname: unknown = profile.data().surname;
+        const rawEmail: unknown = profile.data().email;
+        const name = [rawName, rawSurname]
+          .filter(
+            (value): value is string =>
+              typeof value === "string" && value.trim().length > 0,
+          )
+          .map((value) => value.trim())
+          .join(" ");
+
+        applicants.set(supporterId, {
+          name: name || "Kullanıcı bulunamadı",
+          email:
+            typeof rawEmail === "string" && rawEmail.trim()
+              ? rawEmail.trim()
+              : "E-posta bulunamadı",
+        });
+      }),
+    );
+
+    return {
+      success: true,
+      data: parsedRequests.data.map((request) => {
+        const applicant = applicants.get(request.supporterId);
+        return {
+          request,
+          applicantName: applicant?.name ?? "Kullanıcı bulunamadı",
+          applicantEmail: applicant?.email ?? "E-posta bulunamadı",
+        };
+      }),
+    };
+  } catch (error: unknown) {
+    return failure(error);
+  }
+}
+
+export async function getAdminSupportRequestStatistics(
+  adminId: string,
+): Promise<
+  SupportRequestServiceResult<AdminSupportRequestStatistics>
+> {
+  const authorization = await ensureAdmin(adminId);
+  if (!authorization.success) return authorization;
+
+  try {
+    const pending = await getCountFromServer(
+      query(
+        collection(db, "supportRequests"),
+        where("status", "==", "pending"),
+      ),
+    );
+    return { success: true, data: { pending: pending.data().count } };
+  } catch (error: unknown) {
+    return failure(error);
+  }
+}
+
 async function reviewSupportRequest(
   requestId: string,
   adminId: string,
@@ -258,7 +394,9 @@ async function reviewSupportRequest(
 
   try {
     const reference = doc(db, "supportRequests", requestId);
-    await runTransaction(db, async (transaction) => {
+    const reviewedSupportRequest = await runTransaction(
+      db,
+      async (transaction) => {
       const snapshot = await transaction.get(reference);
       if (!snapshot.exists() || snapshot.data().status !== "pending") {
         throw new Error("support-request/not-pending");
@@ -266,19 +404,27 @@ async function reviewSupportRequest(
 
       const reviewData = {
         status,
+        adminNote,
         reviewedBy: reviewerId,
         reviewedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-        ...(adminNote ? { adminNote } : {}),
       };
       transaction.update(reference, reviewData);
-    });
+        return {
+          supporterId:
+            typeof snapshot.data().supporterId === "string"
+              ? snapshot.data().supporterId
+              : "",
+        };
+      },
+    );
 
     const reviewedRequest = await getDocFromServer(reference);
     const reviewedData = reviewedRequest.data();
     if (
       !reviewedRequest.exists() ||
       reviewedData?.status !== status ||
+      reviewedData.adminNote !== adminNote ||
       reviewedData.reviewedBy !== reviewerId ||
       reviewedData.reviewedAt == null ||
       reviewedData.updatedAt == null
@@ -287,6 +433,31 @@ async function reviewSupportRequest(
         "Destek baÅŸvurusu deÄŸerlendirme bilgileri doÄŸrulanamadÄ±.",
       );
     }
+
+    if (reviewedSupportRequest.supporterId) {
+      const notification = await createNotification({
+        userId: reviewedSupportRequest.supporterId,
+        title:
+          status === "approved"
+            ? "Destek başvurun onaylandı"
+            : "Destek başvurun reddedildi",
+        message:
+          status === "approved"
+            ? "Destek başvurun yönetici tarafından onaylandı."
+            : "Destek başvurun yönetici tarafından reddedildi.",
+        type:
+          status === "approved"
+            ? "support_request_approved"
+            : "support_request_rejected",
+      });
+      if (!notification.success) {
+        logNotificationError(
+          "reviewSupportRequest",
+          notification.error.message,
+        );
+      }
+    }
+
     return { success: true, data: undefined };
   } catch (error: unknown) {
     if (error instanceof Error && error.message === "support-request/not-pending") {

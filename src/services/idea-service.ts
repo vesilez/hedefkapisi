@@ -14,6 +14,10 @@ import {
 } from "@/lib/validations/idea-schema";
 import { slugify } from "@/lib/utils/slugify";
 import {
+  createNotification,
+  notifyAllAdmins,
+} from "@/services/notification-service";
+import {
   IDEA_VISIBILITIES,
   type Idea,
   type IdeaListItem,
@@ -26,6 +30,7 @@ import {
   doc,
   getDoc,
   getDocFromServer,
+  getCountFromServer,
   getDocs,
   getDocsFromServer,
   limit,
@@ -33,6 +38,7 @@ import {
   runTransaction,
   serverTimestamp,
   setDoc,
+  Timestamp,
   where,
 } from "firebase/firestore";
 import { z } from "zod";
@@ -50,6 +56,12 @@ export interface IdeaMutationInput extends IdeaFormInput {
 export interface AdminIdeaListItem {
   idea: Idea;
   userName: string;
+}
+
+export interface AdminIdeaStatistics {
+  total: number;
+  pending: number;
+  addedLastSevenDays: number;
 }
 
 const timestampSchema = z.unknown().transform((value, context) => {
@@ -139,6 +151,10 @@ function logDevelopmentError(context: string, error: unknown): void {
   console.error(`[idea-service:${context}]`, {
     code: getFirebaseErrorCode(error) ?? "firestore/unknown",
   });
+}
+
+function logNotificationError(context: string, message: string): void {
+  console.error(`[idea-service:${context}] notification failed:`, message);
 }
 
 function validationFailure<T>(message: string): IdeaServiceResult<T> {
@@ -274,6 +290,15 @@ export async function createIdea(
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
+
+    const notification = await notifyAllAdmins({
+      title: "Yeni hayal oluşturuldu",
+      message: `"${validation.data.title}" başlıklı yeni bir hayal oluşturuldu.`,
+      type: "new_idea",
+    });
+    if (!notification.success) {
+      logNotificationError("createIdea", notification.error.message);
+    }
 
     return { success: true, data: { id: ideaReference.id } };
   } catch (error: unknown) {
@@ -615,6 +640,42 @@ export async function getAdminIdeas(
   }
 }
 
+export async function getAdminIdeaStatistics(
+  adminId: string,
+): Promise<IdeaServiceResult<AdminIdeaStatistics>> {
+  const authorization = await ensureAdmin(adminId);
+  if (!authorization.success) return authorization;
+
+  try {
+    const ideas = collection(db, "ideas");
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    const [total, pending, addedLastSevenDays] = await Promise.all([
+      getCountFromServer(ideas),
+      getCountFromServer(query(ideas, where("status", "==", "pending"))),
+      getCountFromServer(
+        query(
+          ideas,
+          where("createdAt", ">=", Timestamp.fromDate(sevenDaysAgo)),
+        ),
+      ),
+    ]);
+
+    return {
+      success: true,
+      data: {
+        total: total.data().count,
+        pending: pending.data().count,
+        addedLastSevenDays: addedLastSevenDays.data().count,
+      },
+    };
+  } catch (error: unknown) {
+    logDevelopmentError("getAdminIdeaStatistics", error);
+    return failure(error);
+  }
+}
+
 async function moderateIdea(
   ideaId: string,
   adminId: string,
@@ -624,7 +685,7 @@ async function moderateIdea(
   if (!authorization.success) return authorization;
 
   try {
-    await runTransaction(db, async (transaction) => {
+    const moderatedIdea = await runTransaction(db, async (transaction) => {
       const ideaReference = doc(db, "ideas", ideaId);
       const snapshot = await transaction.get(ideaReference);
       if (!snapshot.exists() || snapshot.data().status !== "pending") {
@@ -637,7 +698,41 @@ async function moderateIdea(
         moderatedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
+
+      return {
+        studentId:
+          typeof snapshot.data().studentId === "string"
+            ? snapshot.data().studentId
+            : "",
+        title:
+          typeof snapshot.data().title === "string"
+            ? snapshot.data().title
+            : "Hayalin",
+      };
     });
+
+    const nextStatus = update.status;
+    if (
+      moderatedIdea.studentId &&
+      (nextStatus === "approved" || nextStatus === "rejected")
+    ) {
+      const notification = await createNotification({
+        userId: moderatedIdea.studentId,
+        title:
+          nextStatus === "approved"
+            ? "Hayalin onaylandı"
+            : "Hayalin reddedildi",
+        message:
+          nextStatus === "approved"
+            ? `"${moderatedIdea.title}" başlıklı hayalin onaylandı.`
+            : `"${moderatedIdea.title}" başlıklı hayalin reddedildi.`,
+        type:
+          nextStatus === "approved" ? "idea_approved" : "idea_rejected",
+      });
+      if (!notification.success) {
+        logNotificationError("moderateIdea", notification.error.message);
+      }
+    }
 
     return { success: true, data: undefined };
   } catch (error: unknown) {

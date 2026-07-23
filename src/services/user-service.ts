@@ -37,12 +37,15 @@ import {
   type DocumentSnapshot,
   collection,
   doc,
+  getCountFromServer,
   getDoc,
   getDocFromServer,
   getDocsFromServer,
   onSnapshot,
+  query,
   serverTimestamp,
   setDoc,
+  where,
   type Unsubscribe,
 } from "firebase/firestore";
 import { z } from "zod";
@@ -69,6 +72,13 @@ export type AdminUserListItem = Pick<
   BaseUser,
   "id" | "name" | "surname" | "email" | "role" | "status" | "createdAt"
 >;
+
+export interface AdminUserStatistics {
+  total: number;
+  students: number;
+  supporters: number;
+  mentors: number;
+}
 
 export type UserAccessProfileListener = (
   result: UserServiceResult<UserAccessProfile | null>,
@@ -315,6 +325,35 @@ export async function getAdminUsers(
       secondUser.createdAt.localeCompare(firstUser.createdAt),
     );
     return { success: true, data: users };
+  } catch (error: unknown) {
+    return failure(error);
+  }
+}
+
+export async function getAdminUserStatistics(
+  adminId: string,
+): Promise<UserServiceResult<AdminUserStatistics>> {
+  const authorization = await ensureAdminUser(adminId);
+  if (!authorization.success) return authorization;
+
+  try {
+    const users = collection(db, "users");
+    const [total, students, supporters, mentors] = await Promise.all([
+      getCountFromServer(users),
+      getCountFromServer(query(users, where("role", "==", "student"))),
+      getCountFromServer(query(users, where("role", "==", "supporter"))),
+      getCountFromServer(query(users, where("role", "==", "mentor"))),
+    ]);
+
+    return {
+      success: true,
+      data: {
+        total: total.data().count,
+        students: students.data().count,
+        supporters: supporters.data().count,
+        mentors: mentors.data().count,
+      },
+    };
   } catch (error: unknown) {
     return failure(error);
   }

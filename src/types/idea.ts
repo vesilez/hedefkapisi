@@ -77,6 +77,7 @@ export interface IdeaListItem {
 
 export interface PublicIdeaDetail {
   id: EntityId;
+  studentId: EntityId;
   slug: string;
   title: string;
   shortDescription: string;

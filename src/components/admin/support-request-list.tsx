@@ -3,14 +3,18 @@
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { Select } from "@/components/ui/select";
 import { isAdminRole } from "@/constants/roles";
+import type { SupportRequestStatus } from "@/constants/support-request-statuses";
 import { useAuth } from "@/hooks/use-auth";
-import { getPendingSupportRequests } from "@/services/support-request-service";
+import {
+  getAdminSupportRequests,
+  type AdminSupportRequestListItem,
+} from "@/services/support-request-service";
 import { getUserAccessProfile } from "@/services/user-service";
-import type { SupportRequest } from "@/types/support-request";
 import { Inbox } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { SupportRequestCard } from "./support-request-card";
 
 type ViewState = "loading" | "ready" | "forbidden" | "profile-error" | "list-error";
@@ -20,8 +24,14 @@ export function SupportRequestList() {
   const { user, loading: authLoading } = useAuth();
   const [state, setState] = useState<ViewState>("loading");
   const [checkedUserId, setCheckedUserId] = useState<string | null>(null);
-  const [requests, setRequests] = useState<SupportRequest[]>([]);
-  const [feedback, setFeedback] = useState<string | null>(null);
+  const [requests, setRequests] = useState<AdminSupportRequestListItem[]>([]);
+  const [statusFilter, setStatusFilter] = useState<
+    SupportRequestStatus | "all"
+  >("all");
+  const [feedback, setFeedback] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
 
   async function load(userId: string) {
     const profileResult = await getUserAccessProfile(userId);
@@ -34,12 +44,12 @@ export function SupportRequestList() {
       setState("forbidden");
       return;
     }
-    const requestsResult = await getPendingSupportRequests();
+    const requestsResult = await getAdminSupportRequests(userId);
     if (requestsResult.success) {
       setRequests(requestsResult.data);
       setState("ready");
     } else {
-      setFeedback(requestsResult.error.message);
+      setFeedback({ type: "error", message: requestsResult.error.message });
       setState("list-error");
     }
   }
@@ -62,13 +72,13 @@ export function SupportRequestList() {
         setState("forbidden");
         return;
       }
-      const result = await getPendingSupportRequests();
+      const result = await getAdminSupportRequests(user.id);
       if (!active) return;
       if (result.success) {
         setRequests(result.data);
         setState("ready");
       } else {
-        setFeedback(result.error.message);
+        setFeedback({ type: "error", message: result.error.message });
         setState("list-error");
       }
     });
@@ -77,10 +87,33 @@ export function SupportRequestList() {
     };
   }, [authLoading, router, user]);
 
-  function removeReviewed(requestId: string, message: string) {
-    setRequests((current) => current.filter((item) => item.id !== requestId));
-    setFeedback(message);
+  function updateReviewed(
+    requestId: string,
+    status: Extract<SupportRequestStatus, "approved" | "rejected">,
+    adminNote: string,
+    message: string,
+  ) {
+    setRequests((current) =>
+      current.map((item) =>
+        item.request.id === requestId
+          ? {
+              ...item,
+              request: { ...item.request, status, adminNote },
+            }
+          : item,
+      ),
+    );
+    setFeedback({ type: "success", message });
   }
+
+  const filteredRequests = useMemo(
+    () =>
+      requests.filter(
+        (item) =>
+          statusFilter === "all" || item.request.status === statusFilter,
+      ),
+    [requests, statusFilter],
+  );
 
   if (authLoading || state === "loading" || (user && checkedUserId !== user.id)) {
     return <div className="flex min-h-52 items-center justify-center rounded-2xl bg-white"><LoadingSpinner label="Destek başvuruları yükleniyor..." /></div>;
@@ -92,7 +125,7 @@ export function SupportRequestList() {
   if (state === "profile-error" || state === "list-error") {
     return (
       <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center" role="alert">
-        <p className="font-semibold text-red-800">{state === "profile-error" ? "Kullanıcı profili yüklenemedi." : feedback ?? "Destek başvuruları yüklenemedi."}</p>
+        <p className="font-semibold text-red-800">{state === "profile-error" ? "Kullanıcı profili yüklenemedi." : feedback?.message ?? "Destek başvuruları yüklenemedi."}</p>
         <Button className="mt-4" onClick={() => void load(user.id)}>Tekrar Dene</Button>
       </div>
     );
@@ -100,12 +133,62 @@ export function SupportRequestList() {
 
   return (
     <div>
-      {feedback && <p className="mb-5 rounded-xl bg-emerald-50 p-4 font-semibold text-emerald-800" aria-live="polite">{feedback}</p>}
-      {requests.length === 0 ? (
-        <EmptyState title="Bekleyen destek başvurusu yok" description="Yeni başvurular burada görüntülenecek." icon={Inbox} />
+      {feedback && (
+        <p
+          className={
+            feedback.type === "success"
+              ? "mb-5 rounded-xl bg-emerald-50 p-4 font-semibold text-emerald-800"
+              : "mb-5 rounded-xl bg-red-50 p-4 font-semibold text-red-800"
+          }
+          role={feedback.type === "error" ? "alert" : "status"}
+          aria-live="polite"
+        >
+          {feedback.message}
+        </p>
+      )}
+      <div className="mb-6 max-w-xs">
+        <label htmlFor="support-request-status" className="sr-only">
+          Duruma göre filtrele
+        </label>
+        <Select
+          id="support-request-status"
+          value={statusFilter}
+          onChange={(event) =>
+            setStatusFilter(
+              event.target.value as SupportRequestStatus | "all",
+            )
+          }
+        >
+          <option value="all">Tüm durumlar</option>
+          <option value="pending">Onay Bekliyor</option>
+          <option value="approved">Onaylandı</option>
+          <option value="rejected">Reddedildi</option>
+        </Select>
+      </div>
+      {filteredRequests.length === 0 ? (
+        <EmptyState
+          title={
+            requests.length === 0
+              ? "Henüz destek başvurusu yok"
+              : "Bu durumda başvuru yok"
+          }
+          description={
+            requests.length === 0
+              ? "Yeni başvurular burada görüntülenecek."
+              : "Başka bir durum filtresi seçmeyi deneyin."
+          }
+          icon={Inbox}
+        />
       ) : (
         <div className="grid gap-6">
-          {requests.map((request) => <SupportRequestCard key={request.id} request={request} adminId={user.id} onReviewed={removeReviewed} />)}
+          {filteredRequests.map((item) => (
+            <SupportRequestCard
+              key={item.request.id}
+              item={item}
+              adminId={user.id}
+              onReviewed={updateReviewed}
+            />
+          ))}
         </div>
       )}
     </div>

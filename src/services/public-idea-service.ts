@@ -27,6 +27,7 @@ const timestampSchema = z.unknown().transform((value, context) => {
 
 const publicIdeaSchema = z.object({
   id: z.string().min(1),
+  studentId: z.string().min(1),
   slug: z.string().min(1),
   title: z.string(),
   shortDescription: z.string(),

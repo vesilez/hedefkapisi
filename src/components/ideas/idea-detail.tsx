@@ -7,6 +7,7 @@ import { DEFAULT_CATEGORIES } from "@/constants/default-categories";
 import { IDEA_STAGE_LABELS } from "@/constants/idea-stages";
 import { SUPPORT_TYPE_LABELS } from "@/constants/support-types";
 import type { PublicIdeaDetail } from "@/types/idea";
+import { IdeaComments } from "./idea-comments";
 import { CalendarDays, ExternalLink, HeartHandshake, MapPin, Star, UserRoundX } from "lucide-react";
 
 function formatDate(value: string): string {
@@ -74,6 +75,7 @@ export function IdeaDetail({ idea }: { idea: PublicIdeaDetail }) {
       </Card>
 
       <SupportRequestForm ideaId={idea.id} />
+      <IdeaComments ideaId={idea.id} />
     </div>
   );
 }
