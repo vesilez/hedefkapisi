@@ -1,5 +1,12 @@
 import Link from "next/link";
-import { ArrowUpRight, Mail, Target } from "lucide-react";
+import {
+  ArrowUpRight,
+  Github,
+  Instagram,
+  Linkedin,
+  Mail,
+  Target,
+} from "lucide-react";
 import { mainNavigation } from "@/config/navigation";
 import { siteConfig } from "@/config/site";
 import { PageContainer } from "./page-container";
@@ -23,13 +30,33 @@ export function SiteFooter() {
           <p className="mt-5 text-sm leading-7 text-slate-400">
             {siteConfig.shortDescription}
           </p>
+          <p className="mt-5 text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
+            İletişim
+          </p>
           <a
             href={`mailto:${siteConfig.contactEmail}`}
-            className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 hover:border-blue-500 hover:bg-slate-800 hover:text-white focus-visible:outline-blue-300"
+            className="mt-2 inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 hover:border-blue-500 hover:bg-slate-800 hover:text-white focus-visible:outline-blue-300"
           >
             <Mail aria-hidden="true" className="size-4 text-blue-300" />
             {siteConfig.contactEmail}
           </a>
+          <div className="mt-4 flex items-center gap-2" aria-label="Sosyal medya">
+            {[
+              { label: "Instagram hesabı yakında", icon: Instagram },
+              { label: "LinkedIn hesabı yakında", icon: Linkedin },
+              { label: "GitHub hesabı yakında", icon: Github },
+            ].map(({ label, icon: Icon }) => (
+              <span
+                key={label}
+                aria-label={label}
+                aria-disabled="true"
+                title={label}
+                className="flex size-10 items-center justify-center rounded-xl border border-slate-800 text-slate-500"
+              >
+                <Icon aria-hidden="true" className="size-4.5" />
+              </span>
+            ))}
+          </div>
         </div>
 
         <nav

@@ -21,6 +21,19 @@ html {
   scroll-behavior: smooth;
   scrollbar-gutter: stable;
 }
+@keyframes home-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.home-reveal {
+  animation: home-reveal 560ms ease-out both;
+}
 body {
   margin: 0;
   background: #f8fafc;
@@ -307,5 +320,8 @@ body:has(.admin-shell) > div > main {
   }
   html {
     scroll-behavior: auto;
+  }
+  .home-reveal {
+    animation: none;
   }
 }

@@ -9,6 +9,7 @@ import {
   UsersRound,
 } from "lucide-react";
 import { PageContainer } from "@/components/layout/page-container";
+import { HomePlatform } from "@/components/home/home-platform";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { createPageMetadata } from "@/lib/seo";
@@ -135,7 +136,9 @@ export default function HomePage() {
         </PageContainer>
       </section>
 
-      <section className="py-14 sm:py-20">
+      <HomePlatform />
+
+      <section className="home-reveal bg-slate-50 py-14 sm:py-20">
         <PageContainer>
           <div className="mx-auto max-w-2xl text-center">
             <p className="text-sm font-bold uppercase tracking-[0.18em] text-blue-700">
@@ -179,19 +182,27 @@ export default function HomePage() {
                 className="mx-auto size-7 text-blue-200 md:mx-0"
               />
               <h2 className="mt-3 text-2xl font-extrabold sm:text-3xl">
-                Hayalini görünür kılmaya hazır mısın?
+                Senin fikrin de geleceği değiştirebilir.
               </h2>
               <p className="mt-2 text-sm leading-6 text-blue-100 sm:text-base">
-                Fikrini paylaş, doğru desteğe giden ilk kapıyı aç.
+                Hayalini paylaş, destek bul ve projeni birlikte büyüt.
               </p>
             </div>
-            <Link
-              href="/hayalini-paylas"
-              className="mt-6 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-white px-6 py-3 font-semibold text-blue-800 shadow-md hover:-translate-y-0.5 hover:bg-blue-50 focus-visible:outline-white md:mt-0 md:w-auto"
-            >
-              Hemen Başla
-              <ArrowRight aria-hidden="true" className="size-4" />
-            </Link>
+            <div className="mt-6 grid gap-3 sm:flex sm:justify-center md:mt-0 md:justify-end">
+              <Link
+                href="/hayalini-paylas"
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-white px-6 py-3 font-semibold text-blue-800 shadow-md hover:-translate-y-0.5 hover:bg-blue-50 focus-visible:outline-white"
+              >
+                Hayalini Paylaş
+                <ArrowRight aria-hidden="true" className="size-4" />
+              </Link>
+              <Link
+                href="/hayaller"
+                className="inline-flex min-h-12 items-center justify-center rounded-xl border border-blue-400 px-6 py-3 font-semibold text-white hover:-translate-y-0.5 hover:bg-blue-800 focus-visible:outline-white"
+              >
+                Hayalleri Keşfet
+              </Link>
+            </div>
           </div>
         </PageContainer>
       </section>
