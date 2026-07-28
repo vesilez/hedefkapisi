@@ -17,7 +17,14 @@ import {
 } from "@/services/comment-service";
 import { getUserAccessProfile } from "@/services/user-service";
 import type { IdeaComment } from "@/types/comment";
-import { LoaderCircle, MessageCircle } from "lucide-react";
+import {
+  EyeOff,
+  LoaderCircle,
+  MessageCircle,
+  Pencil,
+  Send,
+  Trash2,
+} from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -86,24 +93,26 @@ export function IdeaComments({ ideaId }: IdeaCommentsProps) {
   }
 
   return (
-    <section className="mt-9" aria-labelledby="comments-title">
-      <Card className="p-5 sm:p-8">
-        <div className="flex items-center gap-3">
-          <span className="flex size-10 items-center justify-center rounded-xl bg-blue-100 text-blue-700">
-            <MessageCircle aria-hidden="true" className="size-5" />
+    <section className="mt-8 sm:mt-9" aria-labelledby="comments-title">
+      <Card className="overflow-hidden border-slate-200 shadow-md sm:p-8">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+          <span className="flex size-11 items-center justify-center rounded-xl bg-blue-100 text-blue-700">
+            <MessageCircle aria-hidden="true" className="size-5.5" />
           </span>
           <div>
-            <h2 id="comments-title" className="text-2xl font-bold text-slate-950">
+            <h2 id="comments-title" className="text-2xl font-bold text-slate-950 sm:text-3xl">
               Yorumlar
             </h2>
-            <p className="text-sm text-slate-500">
-              {comments.length} yorum
-            </p>
           </div>
+          </div>
+          <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-bold text-slate-700">
+            {comments.length} yorum
+          </span>
         </div>
 
         {!authLoading && user ? (
-          <div className="mt-6">
+          <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
             <label
               htmlFor={`new-comment-${ideaId}`}
               className="text-sm font-semibold text-slate-800"
@@ -112,7 +121,7 @@ export function IdeaComments({ ideaId }: IdeaCommentsProps) {
             </label>
             <Textarea
               id={`new-comment-${ideaId}`}
-              className="mt-2"
+              className="mt-2 bg-white"
               value={content}
               minLength={2}
               maxLength={1000}
@@ -120,11 +129,12 @@ export function IdeaComments({ ideaId }: IdeaCommentsProps) {
               placeholder="Düşüncelerini paylaş..."
               onChange={(event) => setContent(event.target.value)}
             />
-            <div className="mt-2 flex items-center justify-between gap-4">
+            <div className="mt-3 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
               <span className="text-xs text-slate-500">
                 {content.length}/1000
               </span>
               <Button
+                className="w-full sm:w-auto"
                 disabled={
                   submitting ||
                   content.trim().length < 2 ||
@@ -135,15 +145,16 @@ export function IdeaComments({ ideaId }: IdeaCommentsProps) {
                 {submitting && (
                   <LoaderCircle
                     aria-hidden="true"
-                    className="mr-2 size-4 animate-spin"
+                    className="size-4 animate-spin"
                   />
                 )}
+                {!submitting && <Send aria-hidden="true" className="size-4" />}
                 Yorum Gönder
               </Button>
             </div>
           </div>
         ) : !authLoading ? (
-          <p className="mt-6 rounded-xl bg-blue-50 p-4 text-sm text-blue-900">
+          <p className="mt-6 rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-900">
             Yorum yapmak için{" "}
             <Link href="/giris" className="font-semibold underline">
               giriş yapmalısın
@@ -281,16 +292,26 @@ function CommentItem({
 
   return (
     <article
-      className={`rounded-xl border p-4 sm:p-5 ${
+      className={`rounded-2xl border p-4 shadow-sm sm:p-5 ${
         comment.status === "hidden"
           ? "border-amber-200 bg-amber-50"
-          : "border-slate-200 bg-slate-50"
+          : "border-slate-200 bg-white hover:border-blue-200"
       }`}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
+        <div className="flex min-w-0 items-start gap-3">
+          <span
+            aria-hidden="true"
+            className="flex size-10 shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-black text-blue-800"
+          >
+            {comment.userName.trim().charAt(0).toLocaleUpperCase("tr-TR") ||
+              "K"}
+          </span>
+          <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="font-semibold text-slate-950">{comment.userName}</h3>
+            <h3 className="break-words font-semibold text-slate-950">
+              {comment.userName}
+            </h3>
             <Badge className="bg-white text-slate-700">
               {USER_ROLE_LABELS[comment.userRole]}
             </Badge>
@@ -305,12 +326,14 @@ function CommentItem({
             }).format(new Date(comment.createdAt))}
             {comment.updatedAt !== comment.createdAt && " · Düzenlendi"}
           </time>
+          </div>
         </div>
       </div>
 
       {editing ? (
         <div className="mt-4">
           <Textarea
+            aria-label="Yorumu düzenle"
             value={draft}
             minLength={2}
             maxLength={1000}
@@ -329,7 +352,7 @@ function CommentItem({
               {action === "edit" && (
                 <LoaderCircle
                   aria-hidden="true"
-                  className="mr-2 size-4 animate-spin"
+                className="size-4 animate-spin"
                 />
               )}
               Kaydet
@@ -348,7 +371,7 @@ function CommentItem({
           </div>
         </div>
       ) : (
-        <p className="mt-4 whitespace-pre-wrap leading-7 text-slate-700">
+        <p className="mt-4 whitespace-pre-wrap break-words leading-7 text-slate-700">
           {comment.content}
         </p>
       )}
@@ -360,14 +383,16 @@ function CommentItem({
       )}
 
       {!editing && (isOwner || isAdmin) && (
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
           {isOwner && (
             <Button
               variant="ghost"
               className="min-h-9 px-3 py-1.5 text-xs"
               disabled={Boolean(action)}
+              aria-label={`${comment.userName} kullanıcısının yorumunu düzenle`}
               onClick={() => setEditing(true)}
             >
+              <Pencil aria-hidden="true" className="size-3.5" />
               Düzenle
             </Button>
           )}
@@ -376,8 +401,18 @@ function CommentItem({
               variant="ghost"
               className="min-h-9 px-3 py-1.5 text-xs text-red-700 hover:bg-red-50"
               disabled={Boolean(action)}
+              aria-label={`${comment.userName} kullanıcısının yorumunu sil`}
               onClick={() => void remove()}
             >
+              {action !== "delete" && (
+                <Trash2 aria-hidden="true" className="size-3.5" />
+              )}
+              {action === "delete" && (
+                <LoaderCircle
+                  aria-hidden="true"
+                  className="size-3.5 animate-spin"
+                />
+              )}
               {action === "delete" ? "Siliniyor..." : "Sil"}
             </Button>
           )}
@@ -386,8 +421,18 @@ function CommentItem({
               variant="secondary"
               className="min-h-9 px-3 py-1.5 text-xs"
               disabled={Boolean(action)}
+              aria-label={`${comment.userName} kullanıcısının yorumunu gizle`}
               onClick={() => void hide()}
             >
+              {action !== "hide" && (
+                <EyeOff aria-hidden="true" className="size-3.5" />
+              )}
+              {action === "hide" && (
+                <LoaderCircle
+                  aria-hidden="true"
+                  className="size-3.5 animate-spin"
+                />
+              )}
               {action === "hide" ? "Gizleniyor..." : "Gizle"}
             </Button>
           )}

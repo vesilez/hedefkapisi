@@ -8,18 +8,26 @@ import {
   toggleIdeaLike,
 } from "@/services/idea-engagement-service";
 import type { IdeaEngagementState } from "@/types/idea-engagement";
-import { Bookmark, Heart, LoaderCircle } from "lucide-react";
+import {
+  Bookmark,
+  Check,
+  Heart,
+  LoaderCircle,
+  Share2,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 interface IdeaEngagementProps {
   ideaId: string;
   initialLikeCount: number;
+  ideaTitle: string;
 }
 
 export function IdeaEngagement({
   ideaId,
   initialLikeCount,
+  ideaTitle,
 }: IdeaEngagementProps) {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
@@ -30,6 +38,7 @@ export function IdeaEngagement({
   });
   const [loading, setLoading] = useState(true);
   const [action, setAction] = useState<"like" | "favorite" | null>(null);
+  const [shared, setShared] = useState(false);
   const [feedback, setFeedback] = useState<{
     type: "success" | "error";
     message: string;
@@ -121,54 +130,106 @@ export function IdeaEngagement({
     setAction(null);
   }
 
+  async function shareIdea() {
+    const shareData = {
+      title: ideaTitle,
+      text: `${ideaTitle} hayalini Hedef Kapısı'nda incele.`,
+      url: window.location.href,
+    };
+
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+      } else {
+        await navigator.clipboard.writeText(window.location.href);
+      }
+      setShared(true);
+      window.setTimeout(() => setShared(false), 2200);
+    } catch (error: unknown) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      setFeedback({
+        type: "error",
+        message: "Paylaşım bağlantısı oluşturulamadı.",
+      });
+    }
+  }
+
   return (
-    <div className="mt-6">
-      <div className="flex flex-wrap gap-3">
+    <div className="mt-7">
+      <div
+        className="grid gap-2 sm:flex sm:flex-wrap"
+        aria-label="Hayal etkileşimleri"
+      >
         <Button
           variant={state.isLiked ? "primary" : "secondary"}
+          className="w-full shadow-sm sm:w-auto"
           disabled={loading || authLoading || Boolean(action)}
           aria-pressed={state.isLiked}
+          aria-label={`${state.likeCount} beğeni. ${
+            state.isLiked ? "Beğeniyi geri al" : "Hayali beğen"
+          }`}
           onClick={() => void toggleLike()}
         >
           {action === "like" ? (
             <LoaderCircle
               aria-hidden="true"
-              className="mr-2 size-4 animate-spin"
+              className="size-4 animate-spin"
             />
           ) : (
             <Heart
               aria-hidden="true"
-              className={`mr-2 size-4 ${state.isLiked ? "fill-current" : ""}`}
+              className={`size-4 ${state.isLiked ? "fill-current" : ""}`}
             />
           )}
           {state.likeCount} Beğeni
         </Button>
         <Button
           variant={state.isFavorite ? "primary" : "secondary"}
+          className="w-full shadow-sm sm:w-auto"
           disabled={loading || authLoading || Boolean(action)}
           aria-pressed={state.isFavorite}
+          aria-label={
+            state.isFavorite
+              ? "Hayali favorilerden çıkar"
+              : "Hayali favorilere ekle"
+          }
           onClick={() => void toggleFavorite()}
         >
           {action === "favorite" ? (
             <LoaderCircle
               aria-hidden="true"
-              className="mr-2 size-4 animate-spin"
+              className="size-4 animate-spin"
             />
           ) : (
             <Bookmark
               aria-hidden="true"
-              className={`mr-2 size-4 ${
+              className={`size-4 ${
                 state.isFavorite ? "fill-current" : ""
               }`}
             />
           )}
           {state.isFavorite ? "Favorilerimde" : "Favoriye Ekle"}
         </Button>
+        <Button
+          variant="secondary"
+          className="w-full shadow-sm sm:w-auto"
+          aria-label="Hayali paylaş"
+          onClick={() => void shareIdea()}
+        >
+          {shared ? (
+            <Check aria-hidden="true" className="size-4 text-emerald-700" />
+          ) : (
+            <Share2 aria-hidden="true" className="size-4" />
+          )}
+          {shared ? "Bağlantı Kopyalandı" : "Paylaş"}
+        </Button>
       </div>
       {feedback && (
         <p
-          className={`mt-3 text-sm font-medium ${
-            feedback.type === "success" ? "text-emerald-700" : "text-red-700"
+          className={`mt-3 rounded-xl px-4 py-3 text-sm font-medium ${
+            feedback.type === "success"
+              ? "bg-emerald-50 text-emerald-800"
+              : "bg-red-50 text-red-800"
           }`}
           role={feedback.type === "error" ? "alert" : "status"}
         >
