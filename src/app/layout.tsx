@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { AuthProvider } from "@/components/auth";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
@@ -9,6 +9,40 @@ export const metadata: Metadata = {
   metadataBase: new URL(siteConfig.url),
   title: { default: siteConfig.name, template: `%s | ${siteConfig.name}` },
   description: siteConfig.description,
+  applicationName: siteConfig.name,
+  authors: [{ name: siteConfig.name }],
+  creator: siteConfig.name,
+  publisher: siteConfig.name,
+  category: "education",
+  alternates: { canonical: "/" },
+  manifest: "/manifest.webmanifest",
+  openGraph: {
+    type: "website",
+    locale: "tr_TR",
+    url: "/",
+    siteName: siteConfig.name,
+    title: siteConfig.name,
+    description: siteConfig.description,
+    images: [{ url: "/opengraph-image", alt: siteConfig.name }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: siteConfig.name,
+    description: siteConfig.description,
+    images: ["/opengraph-image"],
+  },
+  icons: {
+    icon: [{ url: "/icon", type: "image/png" }],
+    apple: [{ url: "/apple-icon", type: "image/png" }],
+  },
+};
+
+export const viewport: Viewport = {
+  colorScheme: "light dark",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#020617" },
+  ],
 };
 
 export default function RootLayout({
@@ -17,6 +51,32 @@ export default function RootLayout({
   return (
     <html lang="tr" data-theme="light" suppressHydrationWarning>
       <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@graph": [
+                {
+                  "@type": "Organization",
+                  "@id": `${siteConfig.url}/#organization`,
+                  name: siteConfig.name,
+                  url: siteConfig.url,
+                  email: siteConfig.contactEmail,
+                },
+                {
+                  "@type": "WebSite",
+                  "@id": `${siteConfig.url}/#website`,
+                  url: siteConfig.url,
+                  name: siteConfig.name,
+                  description: siteConfig.description,
+                  inLanguage: "tr-TR",
+                  publisher: { "@id": `${siteConfig.url}/#organization` },
+                },
+              ],
+            }).replace(/</g, "\\u003c"),
+          }}
+        />
         <script
           dangerouslySetInnerHTML={{
             __html:

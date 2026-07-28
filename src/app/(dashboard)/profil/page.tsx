@@ -1,11 +1,13 @@
 import { PageContainer } from "@/components/layout/page-container";
 import { ProfileDashboard } from "@/components/profile";
-import type { Metadata } from "next";
+import { createPageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: { absolute: "Profilim | Hedef Kapısı" },
+export const metadata = createPageMetadata({
+  title: "Profilim",
   description: "Hedef Kapısı profil bilgilerini görüntüle ve güncelle.",
-};
+  path: "/profil",
+  noIndex: true,
+});
 
 export default function ProfilePage() {
   return (

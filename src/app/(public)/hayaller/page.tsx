@@ -1,12 +1,14 @@
 import { IdeaList } from "@/components/ideas";
 import { PageContainer } from "@/components/layout/page-container";
 import { normalizeIdeaFilters } from "@/services/idea-filter-service";
-import type { Metadata } from "next";
+import { createPageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: { absolute: "Hayaller | Hedef Kapısı" },
-  description: "Öğrencilerin paylaştığı hayalleri ve fikirleri keşfet.",
-};
+export const metadata = createPageMetadata({
+  title: "Hayaller",
+  description:
+    "Öğrencilerin paylaştığı hayalleri ve fikirleri keşfet, ilham al ve destek olabileceğin projeleri bul.",
+  path: "/hayaller",
+});
 
 export default async function IdeasPage({
   searchParams,

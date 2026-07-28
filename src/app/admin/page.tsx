@@ -1,10 +1,12 @@
 import { AdminOverview } from "@/components/admin";
-import type { Metadata } from "next";
+import { createPageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: { absolute: "Genel Bakış | Hedef Kapısı" },
+export const metadata = createPageMetadata({
+  title: "Admin Genel Bakış",
   description: "Platform istatistiklerini ve bekleyen işlemleri görüntüle.",
-};
+  path: "/admin",
+  noIndex: true,
+});
 
 export default function AdminPage() {
   return (

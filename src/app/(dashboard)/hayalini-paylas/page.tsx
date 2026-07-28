@@ -1,11 +1,14 @@
 import { PageContainer } from "@/components/layout/page-container";
 import { IdeaForm } from "@/components/ideas";
-import type { Metadata } from "next";
+import { createPageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: { absolute: "Hayalini Paylaş | Hedef Kapısı" },
-  description: "Hayalini veya fikrini paylaş, ihtiyaç duyduğun desteği belirt.",
-};
+export const metadata = createPageMetadata({
+  title: "Hayalini Paylaş",
+  description:
+    "Hayalini veya fikrini paylaş, ihtiyaç duyduğun desteği belirt ve doğru kişilerle buluş.",
+  path: "/hayalini-paylas",
+  noIndex: true,
+});
 
 export default function ShareIdeaPage() {
   return (

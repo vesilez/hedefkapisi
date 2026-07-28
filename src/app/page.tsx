@@ -8,6 +8,14 @@ import {
 import { PageContainer } from "@/components/layout/page-container";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { createPageMetadata } from "@/lib/seo";
+
+export const metadata = createPageMetadata({
+  title: "Gençlerin Hayallerini Gerçeğe Dönüştüren Platform",
+  description:
+    "Hayalini paylaş, mentorlar ve destekçilerle buluş; fikrini güvenli adımlarla geleceğe taşı.",
+  path: "/",
+});
 
 export default function HomePage() {
   return (
