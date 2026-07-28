@@ -11,7 +11,7 @@ export default function AdminLayout({
   return (
     <div className="admin-shell md:flex">
       <AdminSidebar />
-      <main className="min-w-0 flex-1 bg-slate-100 px-4 py-10 sm:px-8">
+      <main className="min-w-0 flex-1 bg-slate-100 px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
         {children}
       </main>
     </div>

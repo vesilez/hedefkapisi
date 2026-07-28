@@ -37,14 +37,14 @@ export function IdeaDetail({ idea }: { idea: PublicIdeaDetail }) {
   ].filter((link): link is { href: string; label: string } => Boolean(link.href));
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:py-14">
+    <div className="mx-auto min-w-0 max-w-5xl px-4 py-8 sm:px-6 sm:py-10 lg:py-14">
       <header>
         <div className="flex flex-wrap gap-2">
           <Badge>{categoryLabel}</Badge>
           <Badge className="bg-slate-100 text-slate-700">{IDEA_STAGE_LABELS[idea.stage]}</Badge>
           {idea.isFeatured && <Badge className="gap-1 bg-amber-100 text-amber-800"><Star className="size-3.5" aria-hidden="true" /> Öne Çıkan</Badge>}
         </div>
-        <h1 className="mt-5 max-w-4xl text-3xl font-extrabold tracking-tight text-slate-950 sm:text-5xl">{idea.title}</h1>
+        <h1 className="mt-5 max-w-4xl break-words text-3xl font-extrabold tracking-tight text-slate-950 sm:text-5xl">{idea.title}</h1>
         <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-sm text-slate-600">
           {idea.city && <span className="inline-flex items-center gap-1.5"><MapPin className="size-4" aria-hidden="true" /> {idea.city}</span>}
           <span className="inline-flex items-center gap-1.5"><HeartHandshake className="size-4" aria-hidden="true" />{idea.supportCount} destek</span>
@@ -57,7 +57,7 @@ export function IdeaDetail({ idea }: { idea: PublicIdeaDetail }) {
         />
       </header>
 
-      <Card className="mt-9 grid gap-8 p-6 sm:p-8">
+      <Card className="mt-7 grid gap-7 sm:mt-9 sm:gap-8 sm:p-8">
         <DetailSection title="Kısa Açıklama"><p className="text-lg font-medium text-slate-800">{idea.shortDescription}</p></DetailSection>
         <DetailSection title="Fikir Hakkında">{idea.description}</DetailSection>
         <DetailSection title="Hangi Problemi Çözüyor?">{idea.problem}</DetailSection>
@@ -73,7 +73,7 @@ export function IdeaDetail({ idea }: { idea: PublicIdeaDetail }) {
         {links.length > 0 && (
           <DetailSection title="Proje Bağlantıları">
             <ul className="grid gap-3 sm:grid-cols-2">
-              {links.map((link) => <li key={link.label}><a href={link.href} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-blue-200 px-4 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-50">{link.label}<ExternalLink className="size-4" aria-hidden="true" /></a></li>)}
+              {links.map((link) => <li key={link.label}><a href={link.href} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 w-full items-center justify-between gap-2 rounded-xl border border-blue-200 px-4 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-50 focus-visible:outline-blue-700">{link.label}<ExternalLink className="size-4 shrink-0" aria-hidden="true" /></a></li>)}
             </ul>
           </DetailSection>
         )}

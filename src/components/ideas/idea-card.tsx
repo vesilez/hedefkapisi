@@ -27,7 +27,7 @@ export function IdeaCard({ idea }: { idea: IdeaListItem }) {
         )}
       </div>
 
-      <h2 className="mt-4 text-xl font-bold leading-7 text-slate-950">
+      <h2 className="mt-4 min-w-0 break-words text-xl font-bold leading-7 text-slate-950">
         {idea.title}
       </h2>
       <p className="mt-3 line-clamp-3 leading-7 text-slate-600">
@@ -70,7 +70,7 @@ export function IdeaCard({ idea }: { idea: IdeaListItem }) {
       <div className="mt-auto pt-6">
         <Link
           href={`/hayaller/${idea.slug}`}
-          className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-blue-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-800"
+          className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-blue-700 px-5 py-2.5 text-center text-sm font-semibold text-white hover:bg-blue-800 focus-visible:outline-blue-700"
           aria-label={`${idea.title} fikrinin detaylarını gör`}
         >
           Detayları Gör

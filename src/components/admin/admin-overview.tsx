@@ -217,7 +217,7 @@ export function AdminOverview() {
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {cards.map(({ label, value, icon: Icon, tone }) => (
-          <Card key={label} className="p-5">
+          <Card key={label}>
             <div className={`flex size-11 items-center justify-center rounded-xl ${tone}`}>
               <Icon aria-hidden={true} className="size-5" />
             </div>
@@ -245,10 +245,10 @@ export function AdminOverview() {
             <Link
               key={link.href}
               href={link.href}
-              className="flex min-h-12 items-center justify-between rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-800 transition-colors hover:bg-blue-100"
+              className="flex min-h-12 min-w-0 items-center justify-between gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-800 transition-colors hover:bg-blue-100 focus-visible:outline-blue-700"
             >
               {link.label}
-              <ArrowRight aria-hidden="true" className="size-4" />
+              <ArrowRight aria-hidden="true" className="size-4 shrink-0" />
             </Link>
           ))}
         </div>

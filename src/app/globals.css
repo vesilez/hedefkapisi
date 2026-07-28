@@ -19,12 +19,38 @@
 }
 html {
   scroll-behavior: smooth;
+  scrollbar-gutter: stable;
 }
 body {
   margin: 0;
   background: #f8fafc;
   color: #0f172a;
   font-family: Arial, Helvetica, sans-serif;
+}
+body {
+  min-width: 320px;
+  overflow-x: hidden;
+}
+h1,
+h2,
+h3,
+p,
+dd,
+td,
+th {
+  overflow-wrap: anywhere;
+}
+a,
+button,
+summary,
+input,
+textarea,
+select {
+  -webkit-tap-highlight-color: transparent;
+}
+:focus-visible {
+  outline: 2px solid #1d4ed8;
+  outline-offset: 3px;
 }
 body,
 header,
@@ -254,6 +280,13 @@ body:has(.admin-shell) > div > main {
   background: #0f172a;
   color: #f8fafc;
 }
+[data-theme="dark"] :focus-visible {
+  outline-color: #93c5fd;
+}
+[data-theme="dark"] ::selection {
+  background: #1d4ed8;
+  color: #ffffff;
+}
 
 @media (prefers-reduced-motion: reduce) {
   body,
@@ -271,5 +304,8 @@ body:has(.admin-shell) > div > main {
   select,
   a {
     transition: none;
+  }
+  html {
+    scroll-behavior: auto;
   }
 }

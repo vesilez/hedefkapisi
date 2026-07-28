@@ -269,7 +269,12 @@ export function UserManagementList() {
         />
       ) : (
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="overflow-x-auto">
+          <div
+            className="-mx-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0"
+            role="region"
+            aria-label="Kullanıcı yönetimi tablosu"
+            tabIndex={0}
+          >
             <table className="w-full min-w-6xl border-collapse text-left">
               <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
                 <tr>

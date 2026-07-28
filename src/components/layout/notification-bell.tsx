@@ -87,10 +87,19 @@ export function NotificationBell({ userId }: { userId: string }) {
   }
 
   return (
-    <details ref={detailsRef} className="relative">
+    <details
+      ref={detailsRef}
+      className="relative"
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && detailsRef.current) {
+          detailsRef.current.open = false;
+        }
+      }}
+    >
       <summary
         className="relative flex size-11 cursor-pointer list-none items-center justify-center rounded-xl text-slate-700 hover:bg-slate-100"
         aria-label={`Bildirimler${unreadCount ? `, ${unreadCount} okunmamış` : ""}`}
+        aria-haspopup="menu"
       >
         <Bell aria-hidden="true" className="size-5" />
         {unreadCount > 0 && (
@@ -100,7 +109,7 @@ export function NotificationBell({ userId }: { userId: string }) {
         )}
       </summary>
 
-      <div className="absolute right-0 top-13 z-30 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
+      <div className="fixed inset-x-3 top-20 z-50 max-h-[calc(100dvh-6rem)] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-13 sm:w-[min(22rem,calc(100vw-2rem))]">
         <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
           <h2 className="font-bold text-slate-950">Bildirimler</h2>
           <button
@@ -121,7 +130,7 @@ export function NotificationBell({ userId }: { userId: string }) {
           </button>
         </div>
 
-        <div className="max-h-96 overflow-y-auto">
+        <div className="max-h-[calc(100dvh-10.5rem)] overscroll-contain overflow-y-auto sm:max-h-96">
           {loading ? (
             <div className="flex items-center justify-center p-8">
               <LoaderCircle

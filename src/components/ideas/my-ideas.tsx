@@ -74,7 +74,7 @@ function IdeaCard({ idea }: { idea: Idea }) {
         <span className="text-sm font-medium text-slate-500">{category}</span>
       </div>
 
-      <h2 className="mt-4 text-xl font-bold leading-7 text-slate-950">
+      <h2 className="mt-4 break-words text-xl font-bold leading-7 text-slate-950">
         {idea.title}
       </h2>
       <p className="mt-2 line-clamp-3 leading-7 text-slate-600">
@@ -238,7 +238,7 @@ export function MyIdeas() {
           </div>
         </div>
       ) : (
-        <div className="grid gap-6 md:grid-cols-2">
+        <div className="grid gap-5 md:grid-cols-2 xl:gap-6">
           {ideas.map((idea) => (
             <IdeaCard key={idea.id} idea={idea} />
           ))}

@@ -93,7 +93,7 @@ export function FavoriteIdeas() {
   }
 
   return (
-    <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+    <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3 xl:gap-6">
       {items.map((item) => (
         <IdeaCard key={item.favoriteId} idea={item.idea} />
       ))}

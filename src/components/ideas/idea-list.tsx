@@ -130,7 +130,7 @@ export function IdeaList({
         {filteredIdeas.length} hayal bulundu.
       </p>
       {filteredIdeas.length > 0 ? (
-        <div className="mt-5 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+        <div className="mt-5 grid gap-5 md:grid-cols-2 xl:grid-cols-3 xl:gap-6">
           {filteredIdeas.map((idea) => (
             <IdeaCard key={idea.id} idea={idea} />
           ))}

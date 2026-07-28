@@ -2,9 +2,9 @@
 
 import { useAuth } from "@/hooks/use-auth";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { Menu } from "lucide-react";
-import { useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { LogIn, Menu, Target, UserPlus, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { mainNavigation } from "@/config/navigation";
 import { siteConfig } from "@/config/site";
 import { getUserAccessProfile } from "@/services/user-service";
@@ -15,8 +15,10 @@ import { ThemeToggle } from "./theme-toggle";
 
 export function SiteHeader() {
   const router = useRouter();
+  const pathname = usePathname();
   const { user, loading, logout } = useAuth();
   const [loggingOut, setLoggingOut] = useState(false);
+  const mobileMenuRef = useRef<HTMLDetailsElement>(null);
   const [profileAccess, setProfileAccess] = useState<{
     userId: string;
     role: UserRole | null;
@@ -42,41 +44,63 @@ export function SiteHeader() {
 
   async function handleLogout() {
     if (loggingOut) return;
+    closeMobileMenu();
     setLoggingOut(true);
     const result = await logout();
     if (result.success) router.push("/");
     setLoggingOut(false);
   }
 
+  function closeMobileMenu() {
+    if (mobileMenuRef.current) mobileMenuRef.current.open = false;
+  }
+
   return (
-    <header className="border-b border-slate-200 bg-white">
-      <PageContainer className="flex min-h-18 items-center justify-between gap-5">
+    <header className="sticky top-0 z-40 border-b border-slate-200 bg-white shadow-sm">
+      <PageContainer className="flex min-h-18 items-center gap-2 sm:gap-3">
         <Link
           href="/"
-          className="text-lg font-extrabold tracking-tight text-blue-900"
+          className="group flex min-w-0 shrink items-center gap-2.5 rounded-xl focus-visible:outline-blue-700"
         >
-          {siteConfig.name}
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-blue-700 text-white shadow-md shadow-blue-700/20 group-hover:bg-blue-800">
+            <Target aria-hidden="true" className="size-5" />
+          </span>
+          <span className="truncate text-base font-extrabold tracking-tight text-blue-900 sm:text-lg">
+            {siteConfig.name}
+          </span>
         </Link>
         <nav
           aria-label="Ana menü"
-          className="hidden items-center gap-1 lg:flex"
+          className="ml-3 hidden items-center gap-1 lg:flex xl:ml-6"
         >
-          {mainNavigation.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
-            >
-              {item.label}
-            </Link>
-          ))}
+          {mainNavigation.map((item) => {
+            const isActive =
+              item.href === "/"
+                ? pathname === "/"
+                : pathname.startsWith(item.href);
+
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={isActive ? "page" : undefined}
+                className={`rounded-xl px-3 py-2 text-sm font-semibold ${
+                  isActive
+                    ? "bg-blue-50 text-blue-800"
+                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+                }`}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
         </nav>
         {!loading && user && (
-          <div className="ml-auto">
+          <div className="ml-auto shrink-0">
             <NotificationBell userId={user.id} />
           </div>
         )}
-        <div className={user ? "" : "ml-auto"}>
+        <div className={`${user ? "" : "ml-auto"} shrink-0`}>
           <ThemeToggle compact />
         </div>
         <div className="hidden items-center gap-2 lg:flex">
@@ -108,7 +132,7 @@ export function SiteHeader() {
                   type="button"
                   onClick={handleLogout}
                   disabled={loggingOut}
-                  className="rounded-xl bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:opacity-50"
+                className="min-h-10 rounded-xl bg-blue-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:-translate-y-0.5 hover:bg-blue-800 hover:shadow-md focus-visible:outline-blue-700 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {loggingOut ? "Çıkış yapılıyor..." : "Çıkış Yap"}
                 </button>
@@ -117,39 +141,71 @@ export function SiteHeader() {
               <>
                 <Link
                   href="/giris"
-                  className="rounded-xl px-4 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-50"
+                  className="inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-50 focus-visible:outline-blue-700"
                 >
+                  <LogIn aria-hidden="true" className="size-4" />
                   Giriş Yap
                 </Link>
                 <Link
                   href="/kayit"
-                  className="rounded-xl bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800"
+                  className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-blue-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:-translate-y-0.5 hover:bg-blue-800 hover:shadow-md focus-visible:outline-blue-700"
                 >
+                  <UserPlus aria-hidden="true" className="size-4" />
                   Kayıt Ol
                 </Link>
               </>
             ))}
         </div>
-        <details className="relative lg:hidden">
+        <details
+          ref={mobileMenuRef}
+          className="group shrink-0 lg:hidden"
+          onKeyDown={(event) => {
+            if (event.key === "Escape") closeMobileMenu();
+          }}
+        >
           <summary
-            className="flex min-h-11 min-w-11 cursor-pointer list-none items-center justify-center rounded-xl border border-slate-200"
-            aria-label="Menüyü aç"
+            className="flex min-h-11 min-w-11 cursor-pointer list-none items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm hover:border-blue-200 hover:bg-blue-50 hover:text-blue-800"
+            aria-label="Menüyü aç veya kapat"
+            aria-haspopup="menu"
           >
-            <Menu aria-hidden="true" className="size-5" />
+            <Menu aria-hidden="true" className="size-5 group-open:hidden" />
+            <X aria-hidden="true" className="hidden size-5 group-open:block" />
           </summary>
+          <button
+            type="button"
+            aria-label="Mobil menüyü kapat"
+            onClick={closeMobileMenu}
+            className="fixed inset-0 top-18 z-40 cursor-default bg-slate-950/30 backdrop-blur-[2px]"
+          />
           <nav
             aria-label="Mobil menü"
-            className="absolute right-0 top-13 z-20 grid w-64 gap-1 rounded-2xl border border-slate-200 bg-white p-3 shadow-xl"
+            className="fixed inset-x-4 top-20 z-50 grid max-h-[calc(100dvh-6rem)] gap-1 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl sm:left-auto sm:w-80"
           >
-            {mainNavigation.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
-              >
-                {item.label}
-              </Link>
-            ))}
+            <p className="px-3 pb-1 pt-2 text-xs font-bold uppercase tracking-widest text-slate-400">
+              Menü
+            </p>
+            {mainNavigation.map((item) => {
+              const isActive =
+                item.href === "/"
+                  ? pathname === "/"
+                  : pathname.startsWith(item.href);
+
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={closeMobileMenu}
+                  aria-current={isActive ? "page" : undefined}
+                  className={`flex min-h-11 items-center rounded-xl px-3 py-2 text-sm font-semibold ${
+                    isActive
+                      ? "bg-blue-50 text-blue-800"
+                      : "text-slate-700 hover:bg-slate-100"
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
             <hr className="my-1 border-slate-200" />
             {!loading &&
               (user ? (
@@ -158,20 +214,23 @@ export function SiteHeader() {
                     profileAccess.role === "student" && (
                       <Link
                         href="/fikirlerim"
-                        className="rounded-lg px-3 py-2 text-sm font-semibold text-blue-800"
+                        onClick={closeMobileMenu}
+                        className="flex min-h-11 items-center rounded-lg px-3 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-50"
                       >
                         Fikirlerim
                       </Link>
                     )}
                   <Link
                     href="/profil"
-                    className="rounded-lg px-3 py-2 text-sm font-semibold text-blue-800"
+                    onClick={closeMobileMenu}
+                    className="flex min-h-11 items-center rounded-lg px-3 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-50"
                   >
                     Profilim
                   </Link>
                   <Link
                     href="/favorilerim"
-                    className="rounded-lg px-3 py-2 text-sm font-semibold text-blue-800"
+                    onClick={closeMobileMenu}
+                    className="flex min-h-11 items-center rounded-lg px-3 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-50"
                   >
                     Favorilerim
                   </Link>
@@ -179,7 +238,7 @@ export function SiteHeader() {
                     type="button"
                     onClick={handleLogout}
                     disabled={loggingOut}
-                    className="rounded-lg bg-blue-700 px-3 py-2 text-left text-sm font-semibold text-white disabled:opacity-50"
+                    className="min-h-11 rounded-lg bg-blue-700 px-3 py-2 text-left text-sm font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {loggingOut ? "Çıkış yapılıyor..." : "Çıkış Yap"}
                   </button>
@@ -188,13 +247,15 @@ export function SiteHeader() {
                 <>
                   <Link
                     href="/giris"
-                    className="rounded-lg px-3 py-2 text-sm font-semibold text-blue-800"
+                    onClick={closeMobileMenu}
+                    className="flex min-h-11 items-center rounded-lg px-3 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-50"
                   >
                     Giriş Yap
                   </Link>
                   <Link
                     href="/kayit"
-                    className="rounded-lg bg-blue-700 px-3 py-2 text-sm font-semibold text-white"
+                    onClick={closeMobileMenu}
+                    className="flex min-h-11 items-center rounded-lg bg-blue-700 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-800"
                   >
                     Kayıt Ol
                   </Link>
