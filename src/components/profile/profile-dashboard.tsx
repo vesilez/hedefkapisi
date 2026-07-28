@@ -23,7 +23,7 @@ import {
   Send,
 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { FavoriteIdeas } from "@/components/ideas";
 import { ProfileForm } from "./profile-form";
@@ -49,12 +49,21 @@ type ViewState = "loading" | "ready" | "error";
 
 export function ProfileDashboard() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, loading: authLoading } = useAuth();
   const [state, setState] = useState<ViewState>("loading");
   const [data, setData] = useState<ProfileDashboardData | null>(null);
-  const [activeTab, setActiveTab] = useState<ProfileTab>("overview");
+  const requestedTab = searchParams.get("sekme");
+  const [selectedTab, setSelectedTab] = useState<ProfileTab>("overview");
+  const activeTab: ProfileTab =
+    requestedTab === "destekler" ? "supports" : selectedTab;
   const [editingProfile, setEditingProfile] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  function selectTab(tab: ProfileTab) {
+    if (requestedTab) window.history.replaceState(null, "", "/profil");
+    setSelectedTab(tab);
+  }
 
   async function load(userId: string) {
     setState("loading");
@@ -160,7 +169,7 @@ export function ProfileDashboard() {
               type="button"
               role="tab"
               aria-selected={activeTab === tab}
-              onClick={() => setActiveTab(tab)}
+              onClick={() => selectTab(tab)}
               className={`border-b-2 px-4 py-3 text-sm font-semibold transition-colors ${
                 activeTab === tab
                   ? "border-blue-700 text-blue-800"

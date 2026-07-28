@@ -165,12 +165,17 @@ export async function createIdeaComment(
     });
 
     const ideaOwnerId: unknown = idea.data().studentId;
+    const ideaSlug: unknown = idea.data().slug;
     if (typeof ideaOwnerId === "string" && ideaOwnerId !== userId) {
       const notification = await createNotification({
         userId: ideaOwnerId,
         title: "Hayaline yeni yorum geldi",
         message: `${userName}, "${typeof idea.data().title === "string" ? idea.data().title : "hayalin"}" için yorum yaptı.`,
         type: "idea_comment",
+        targetUrl:
+          typeof ideaSlug === "string" && ideaSlug
+            ? `/hayaller/${ideaSlug}`
+            : "/fikirlerim",
       });
       if (!notification.success) {
         console.error(

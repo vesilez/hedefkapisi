@@ -32,6 +32,7 @@ export interface CreateNotificationInput {
   title: string;
   message: string;
   type: NotificationType;
+  targetUrl?: `/${string}`;
 }
 
 const timestampSchema = z.unknown().transform((value, context) => {
@@ -57,6 +58,7 @@ const notificationSchema = z.object({
   title: z.string(),
   message: z.string(),
   type: z.enum(NOTIFICATION_TYPES),
+  targetUrl: z.string().regex(/^\/(?!\/)/).nullable().default(null),
   isRead: z.boolean(),
   createdAt: timestampSchema,
 });
@@ -74,6 +76,7 @@ function notificationData(input: CreateNotificationInput) {
     title: input.title,
     message: input.message,
     type: input.type,
+    ...(input.targetUrl ? { targetUrl: input.targetUrl } : {}),
     isRead: false,
     createdAt: serverTimestamp(),
   };

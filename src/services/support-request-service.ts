@@ -210,12 +210,18 @@ export async function createSupportRequest(
 
     const ideaOwnerId: unknown = idea.data().studentId;
     const ideaTitle: unknown = idea.data().title;
+    const ideaSlug: unknown = idea.data().slug;
+    const ideaTarget =
+      typeof ideaSlug === "string" && ideaSlug
+        ? (`/hayaller/${ideaSlug}` as const)
+        : ("/fikirlerim" as const);
     if (typeof ideaOwnerId === "string" && ideaOwnerId) {
       const ownerNotification = await createNotification({
         userId: ideaOwnerId,
         title: "Yeni destek başvurusu",
         message: `"${typeof ideaTitle === "string" ? ideaTitle : "Hayalin"}" için yeni bir destek başvurusu geldi.`,
         type: "support_request_received",
+        targetUrl: ideaTarget,
       });
       if (!ownerNotification.success) {
         logNotificationError(
@@ -229,6 +235,7 @@ export async function createSupportRequest(
       title: "Yeni destek başvurusu",
       message: `"${typeof ideaTitle === "string" ? ideaTitle : "Bir hayal"}" için yeni bir destek başvurusu geldi.`,
       type: "new_support_request",
+      targetUrl: "/admin/destek-basvurulari",
     });
     if (!adminNotification.success) {
       logNotificationError(
@@ -415,6 +422,10 @@ async function reviewSupportRequest(
             typeof snapshot.data().supporterId === "string"
               ? snapshot.data().supporterId
               : "",
+          ideaId:
+            typeof snapshot.data().ideaId === "string"
+              ? snapshot.data().ideaId
+              : "",
         };
       },
     );
@@ -435,6 +446,14 @@ async function reviewSupportRequest(
     }
 
     if (reviewedSupportRequest.supporterId) {
+      const ideaSnapshot = reviewedSupportRequest.ideaId
+        ? await getDoc(doc(db, "ideas", reviewedSupportRequest.ideaId))
+        : null;
+      const reviewedIdeaSlug: unknown = ideaSnapshot?.data()?.slug;
+      const targetUrl =
+        typeof reviewedIdeaSlug === "string" && reviewedIdeaSlug
+          ? (`/hayaller/${reviewedIdeaSlug}` as const)
+          : ("/profil?sekme=destekler" as const);
       const notification = await createNotification({
         userId: reviewedSupportRequest.supporterId,
         title:
@@ -449,6 +468,7 @@ async function reviewSupportRequest(
           status === "approved"
             ? "support_request_approved"
             : "support_request_rejected",
+        targetUrl,
       });
       if (!notification.success) {
         logNotificationError(

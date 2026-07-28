@@ -7,9 +7,32 @@ import {
 } from "@/services/notification-service";
 import type { Notification } from "@/types/notification";
 import { Bell, CheckCheck, LoaderCircle } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+
+function getNotificationTarget(notification: Notification): string {
+  if (notification.targetUrl) return notification.targetUrl;
+
+  switch (notification.type) {
+    case "new_support_request":
+      return "/admin/destek-basvurulari";
+    case "new_idea":
+      return "/admin/hayaller";
+    case "support_request_approved":
+    case "support_request_rejected":
+      return "/profil?sekme=destekler";
+    case "idea_approved":
+    case "idea_rejected":
+    case "support_request_received":
+    case "idea_comment":
+    case "idea_liked":
+      return "/fikirlerim";
+  }
+}
 
 export function NotificationBell({ userId }: { userId: string }) {
+  const router = useRouter();
+  const detailsRef = useRef<HTMLDetailsElement>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -49,8 +72,22 @@ export function NotificationBell({ userId }: { userId: string }) {
     setMarkingAll(false);
   }
 
+  async function openNotification(notification: Notification) {
+    if (busyId) return;
+
+    if (!notification.isRead) {
+      setBusyId(notification.id);
+      const result = await markNotificationAsRead(notification.id);
+      if (!result.success) setError(result.error.message);
+      setBusyId(null);
+    }
+
+    if (detailsRef.current) detailsRef.current.open = false;
+    router.push(getNotificationTarget(notification));
+  }
+
   return (
-    <details className="relative">
+    <details ref={detailsRef} className="relative">
       <summary
         className="relative flex size-11 cursor-pointer list-none items-center justify-center rounded-xl text-slate-700 hover:bg-slate-100"
         aria-label={`Bildirimler${unreadCount ? `, ${unreadCount} okunmamış` : ""}`}
@@ -104,8 +141,23 @@ export function NotificationBell({ userId }: { userId: string }) {
             notifications.map((notification) => (
               <article
                 key={notification.id}
-                className={`border-b border-slate-100 p-4 last:border-0 ${
-                  notification.isRead ? "bg-white" : "bg-blue-50"
+                role="link"
+                tabIndex={0}
+                aria-label={`${notification.title} bildirimini aç`}
+                onClick={() => void openNotification(notification)}
+                onKeyDown={(event) => {
+                  if (
+                    event.target === event.currentTarget &&
+                    (event.key === "Enter" || event.key === " ")
+                  ) {
+                    event.preventDefault();
+                    void openNotification(notification);
+                  }
+                }}
+                className={`cursor-pointer border-b border-slate-100 p-4 transition-colors last:border-0 ${
+                  notification.isRead
+                    ? "bg-white hover:bg-slate-50"
+                    : "bg-blue-50 hover:bg-blue-100"
                 }`}
               >
                 <div className="flex gap-3">
@@ -135,7 +187,11 @@ export function NotificationBell({ userId }: { userId: string }) {
                         <button
                           type="button"
                           disabled={busyId === notification.id}
-                          onClick={() => void markOne(notification.id)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void markOne(notification.id);
+                          }}
+                          onKeyDown={(event) => event.stopPropagation()}
                           className="text-xs font-semibold text-blue-700 disabled:opacity-50"
                         >
                           {busyId === notification.id

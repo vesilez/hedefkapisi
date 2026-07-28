@@ -194,6 +194,7 @@ export async function toggleIdeaLike(
             : "",
         title:
           typeof idea.data().title === "string" ? idea.data().title : "Hayal",
+        slug: typeof idea.data().slug === "string" ? idea.data().slug : "",
       };
     });
 
@@ -203,6 +204,9 @@ export async function toggleIdeaLike(
         title: "Hayalin beğenildi",
         message: `"${result.title}" başlıklı hayalin beğenildi.`,
         type: "idea_liked",
+        targetUrl: result.slug
+          ? `/hayaller/${result.slug}`
+          : "/fikirlerim",
       });
       if (!notification.success) {
         console.error(
