@@ -3,7 +3,14 @@
 import { useAuth } from "@/hooks/use-auth";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LogIn, Menu, Target, UserPlus, X } from "lucide-react";
+import {
+  LogIn,
+  Menu,
+  MessageCircle,
+  Target,
+  UserPlus,
+  X,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { mainNavigation } from "@/config/navigation";
 import { siteConfig } from "@/config/site";
@@ -117,6 +124,13 @@ export function SiteHeader() {
                     </Link>
                   )}
                 <Link
+                  href="/mesajlar"
+                  className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-50"
+                >
+                  <MessageCircle aria-hidden="true" className="size-4" />
+                  Mesajlar
+                </Link>
+                <Link
                   href="/profil"
                   className="rounded-xl px-4 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-50"
                 >
@@ -220,6 +234,14 @@ export function SiteHeader() {
                         Fikirlerim
                       </Link>
                     )}
+                  <Link
+                    href="/mesajlar"
+                    onClick={closeMobileMenu}
+                    className="flex min-h-11 items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-50"
+                  >
+                    <MessageCircle aria-hidden="true" className="size-4" />
+                    Mesajlar
+                  </Link>
                   <Link
                     href="/profil"
                     onClick={closeMobileMenu}

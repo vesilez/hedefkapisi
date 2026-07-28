@@ -160,21 +160,21 @@ export function HomePlatform() {
       </section>
 
       <section
-        className="home-reveal py-14 sm:py-20"
+        className="relative overflow-visible pb-14 pt-20 sm:pb-20 sm:pt-24"
         aria-labelledby="discover-title"
       >
         <PageContainer>
-          <div className="mx-auto max-w-2xl text-center">
+          <div className="mx-auto max-w-2xl overflow-visible py-1 text-center">
             <p className="text-sm font-bold uppercase tracking-[0.18em] text-blue-700">
               İlham veren fikirler
             </p>
             <h2
               id="discover-title"
-              className="mt-3 text-3xl font-extrabold tracking-tight text-slate-950 sm:text-4xl"
+              className="mt-3 overflow-visible pb-1 text-3xl font-extrabold leading-tight tracking-tight text-slate-950 sm:text-4xl"
             >
               Keşfet
             </h2>
-            <p className="mt-4 leading-7 text-slate-600">
+            <p className="mt-3 overflow-visible pb-1 leading-7 text-slate-600 sm:mt-4">
               Gençlerin geliştirdiği yeni, sevilen ve yükselişte olan hayallere
               göz at.
             </p>

@@ -12,6 +12,7 @@ export default function robots(): MetadataRoute.Robots {
         "/fikirlerim",
         "/favorilerim",
         "/hayalini-paylas",
+        "/mesajlar",
         "/giris",
         "/kayit",
         "/sifremi-unuttum",

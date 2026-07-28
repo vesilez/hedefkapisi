@@ -27,6 +27,8 @@ function getNotificationTarget(notification: Notification): string {
     case "idea_comment":
     case "idea_liked":
       return "/fikirlerim";
+    case "chat_message":
+      return "/mesajlar";
   }
 }
 

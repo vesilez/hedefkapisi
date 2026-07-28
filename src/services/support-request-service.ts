@@ -404,28 +404,78 @@ async function reviewSupportRequest(
     const reviewedSupportRequest = await runTransaction(
       db,
       async (transaction) => {
-      const snapshot = await transaction.get(reference);
-      if (!snapshot.exists() || snapshot.data().status !== "pending") {
-        throw new Error("support-request/not-pending");
-      }
+        const snapshot = await transaction.get(reference);
+        if (!snapshot.exists() || snapshot.data().status !== "pending") {
+          throw new Error("support-request/not-pending");
+        }
 
-      const reviewData = {
-        status,
-        adminNote,
-        reviewedBy: reviewerId,
-        reviewedAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      };
-      transaction.update(reference, reviewData);
+        const supporterId =
+          typeof snapshot.data().supporterId === "string"
+            ? snapshot.data().supporterId
+            : "";
+        const ideaId =
+          typeof snapshot.data().ideaId === "string"
+            ? snapshot.data().ideaId
+            : "";
+        let chatId = "";
+
+        if (status === "approved") {
+          if (!supporterId || !ideaId) {
+            throw new Error("support-request/invalid-participants");
+          }
+          const ideaReference = doc(db, "ideas", ideaId);
+          const chatReference = doc(db, "chats", requestId);
+          const [ideaSnapshot, chatSnapshot] = await Promise.all([
+            transaction.get(ideaReference),
+            transaction.get(chatReference),
+          ]);
+          if (!ideaSnapshot.exists()) {
+            throw new Error("support-request/idea-not-found");
+          }
+          const ownerId: unknown = ideaSnapshot.data().studentId;
+          const ideaTitle: unknown = ideaSnapshot.data().title;
+          if (
+            typeof ownerId !== "string" ||
+            !ownerId ||
+            typeof ideaTitle !== "string" ||
+            !ideaTitle
+          ) {
+            throw new Error("support-request/invalid-participants");
+          }
+
+          chatId = requestId;
+          if (!chatSnapshot.exists()) {
+            transaction.set(chatReference, {
+              id: chatId,
+              supportRequestId: requestId,
+              ideaId,
+              ideaTitle,
+              ownerId,
+              supporterId,
+              participantIds: [ownerId, supporterId],
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+              lastMessage: null,
+              lastMessageAt: null,
+              unreadCounts: {
+                [ownerId]: 0,
+                [supporterId]: 0,
+              },
+            });
+          }
+        }
+
+        transaction.update(reference, {
+          status,
+          adminNote,
+          reviewedBy: reviewerId,
+          reviewedAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
         return {
-          supporterId:
-            typeof snapshot.data().supporterId === "string"
-              ? snapshot.data().supporterId
-              : "",
-          ideaId:
-            typeof snapshot.data().ideaId === "string"
-              ? snapshot.data().ideaId
-              : "",
+          supporterId,
+          ideaId,
+          chatId,
         };
       },
     );
@@ -451,7 +501,9 @@ async function reviewSupportRequest(
         : null;
       const reviewedIdeaSlug: unknown = ideaSnapshot?.data()?.slug;
       const targetUrl =
-        typeof reviewedIdeaSlug === "string" && reviewedIdeaSlug
+        status === "approved" && reviewedSupportRequest.chatId
+          ? (`/mesajlar?sohbet=${reviewedSupportRequest.chatId}` as const)
+          : typeof reviewedIdeaSlug === "string" && reviewedIdeaSlug
           ? (`/hayaller/${reviewedIdeaSlug}` as const)
           : ("/profil?sekme=destekler" as const);
       const notification = await createNotification({
@@ -482,6 +534,15 @@ async function reviewSupportRequest(
   } catch (error: unknown) {
     if (error instanceof Error && error.message === "support-request/not-pending") {
       return messageFailure("Bu başvuru artık değerlendirme beklemiyor.");
+    }
+    if (
+      error instanceof Error &&
+      (error.message === "support-request/invalid-participants" ||
+        error.message === "support-request/idea-not-found")
+    ) {
+      return messageFailure(
+        "Sohbet odası için gerekli başvuru veya hayal bilgileri bulunamadı.",
+      );
     }
     return failure(error);
   }

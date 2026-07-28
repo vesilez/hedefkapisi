@@ -10,6 +10,7 @@ export const NOTIFICATION_TYPES = [
   "new_support_request",
   "idea_comment",
   "idea_liked",
+  "chat_message",
 ] as const;
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
