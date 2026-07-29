@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { useAuth } from "@/hooks/use-auth";
+import { getRecentAdminActivities } from "@/services/admin-analytics-service";
 import {
   getAdminIdeaStatistics,
   type AdminIdeaStatistics,
@@ -18,13 +19,19 @@ import {
   type AdminUserStatistics,
 } from "@/services/user-service";
 import {
+  type AdminActivity,
+  type AdminActivityType,
+} from "@/types/admin-analytics";
+import {
   ArrowRight,
   Clock3,
   GraduationCap,
   HandHeart,
   LayoutDashboard,
   Lightbulb,
+  MessageSquareText,
   Sparkles,
+  UserPlus,
   UserRoundCheck,
   Users,
 } from "lucide-react";
@@ -49,6 +56,22 @@ export function AdminOverview() {
     null,
   );
   const [error, setError] = useState<string | null>(null);
+  const [activityState, setActivityState] = useState<ViewState>("loading");
+  const [activities, setActivities] = useState<AdminActivity[]>([]);
+  const [activityError, setActivityError] = useState<string | null>(null);
+
+  async function loadActivities(adminId: string) {
+    setActivityState("loading");
+    setActivityError(null);
+    const result = await getRecentAdminActivities(adminId);
+    if (result.success) {
+      setActivities(result.data);
+      setActivityState("ready");
+    } else {
+      setActivityError(result.error.message);
+      setActivityState("error");
+    }
+  }
 
   async function loadStatistics(adminId: string) {
     setState("loading");
@@ -86,6 +109,16 @@ export function AdminOverview() {
     }
 
     let active = true;
+    void getRecentAdminActivities(user.id).then((result) => {
+      if (!active) return;
+      if (result.success) {
+        setActivities(result.data);
+        setActivityState("ready");
+      } else {
+        setActivityError(result.error.message);
+        setActivityState("error");
+      }
+    });
     void Promise.all([
       getAdminUserStatistics(user.id),
       getAdminIdeaStatistics(user.id),
@@ -136,10 +169,7 @@ export function AdminOverview() {
         <p className="font-semibold text-red-800">
           {error ?? "Dashboard verileri yüklenemedi."}
         </p>
-        <Button
-          className="mt-4"
-          onClick={() => void loadStatistics(user.id)}
-        >
+        <Button className="mt-4" onClick={() => void loadStatistics(user.id)}>
           Tekrar Dene
         </Button>
       </div>
@@ -218,7 +248,9 @@ export function AdminOverview() {
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {cards.map(({ label, value, icon: Icon, tone }) => (
           <Card key={label}>
-            <div className={`flex size-11 items-center justify-center rounded-xl ${tone}`}>
+            <div
+              className={`flex size-11 items-center justify-center rounded-xl ${tone}`}
+            >
               <Icon aria-hidden={true} className="size-5" />
             </div>
             <p className="mt-5 text-3xl font-extrabold text-slate-950">
@@ -230,6 +262,13 @@ export function AdminOverview() {
       </div>
 
       <AdminAnalyticsSection adminId={user.id} />
+
+      <RecentActivitiesSection
+        state={activityState}
+        activities={activities}
+        error={activityError}
+        onRetry={() => void loadActivities(user.id)}
+      />
 
       <Card className="mt-8">
         <h2 className="text-xl font-bold text-slate-950">Hızlı işlemler</h2>
@@ -254,5 +293,134 @@ export function AdminOverview() {
         </div>
       </Card>
     </div>
+  );
+}
+
+const ACTIVITY_PRESENTATION: Record<
+  AdminActivityType,
+  {
+    label: string;
+    icon: ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
+    tone: string;
+  }
+> = {
+  idea_created: {
+    label: "Yeni hayal",
+    icon: Lightbulb,
+    tone: "bg-amber-100 text-amber-700",
+  },
+  support_requested: {
+    label: "Destek başvurusu",
+    icon: HandHeart,
+    tone: "bg-rose-100 text-rose-700",
+  },
+  user_registered: {
+    label: "Yeni kullanıcı",
+    icon: UserPlus,
+    tone: "bg-blue-100 text-blue-700",
+  },
+  comment_created: {
+    label: "Yeni yorum",
+    icon: MessageSquareText,
+    tone: "bg-violet-100 text-violet-700",
+  },
+};
+
+function formatActivityDate(value: string): string {
+  return new Intl.DateTimeFormat("tr-TR", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
+}
+
+function RecentActivitiesSection({
+  state,
+  activities,
+  error,
+  onRetry,
+}: {
+  state: ViewState;
+  activities: AdminActivity[];
+  error: string | null;
+  onRetry: () => void;
+}) {
+  return (
+    <Card className="mt-8">
+      <div className="mb-5">
+        <h2 className="text-xl font-bold text-slate-950">Son Aktiviteler</h2>
+        <p className="mt-1 text-sm text-slate-600">
+          Platformdaki en güncel kullanıcı hareketleri.
+        </p>
+      </div>
+
+      {state === "loading" ? (
+        <LoadingSpinner
+          className="mx-auto px-0"
+          label="Son aktiviteler yükleniyor..."
+        />
+      ) : state === "error" ? (
+        <div
+          className="rounded-xl border border-red-200 bg-red-50 p-5 text-center"
+          role="alert"
+        >
+          <p className="text-sm font-semibold text-red-800">
+            {error ?? "Son aktiviteler yüklenemedi."}
+          </p>
+          <Button className="mt-4" onClick={onRetry}>
+            Tekrar Dene
+          </Button>
+        </div>
+      ) : activities.length === 0 ? (
+        <EmptyState
+          className="py-8"
+          title="Henüz aktivite yok"
+          description="Yeni hayaller, destek başvuruları, kullanıcılar ve yorumlar burada görünecek."
+          icon={Clock3}
+        />
+      ) : (
+        <ol className="divide-y divide-slate-100">
+          {activities.map((activity) => {
+            const presentation = ACTIVITY_PRESENTATION[activity.type];
+            const Icon = presentation.icon;
+            return (
+              <li
+                key={activity.id}
+                className="grid gap-3 py-4 first:pt-0 last:pb-0 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center"
+              >
+                <div
+                  className={`flex size-10 items-center justify-center rounded-xl ${presentation.tone}`}
+                >
+                  <Icon aria-hidden={true} className="size-5" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="text-xs font-bold uppercase tracking-wide text-blue-700">
+                      {presentation.label}
+                    </span>
+                    <time className="text-xs text-slate-500">
+                      {formatActivityDate(activity.createdAt)}
+                    </time>
+                  </div>
+                  <p className="mt-1 text-sm text-slate-600">
+                    <span className="font-semibold text-slate-950">
+                      {activity.userName}
+                    </span>
+                    <span aria-hidden="true"> · </span>
+                    <span>{activity.relatedTitle}</span>
+                  </p>
+                </div>
+                <Link
+                  href={activity.href}
+                  className="inline-flex min-h-10 items-center gap-2 justify-self-start rounded-lg px-3 text-sm font-semibold text-blue-800 hover:bg-blue-50 sm:justify-self-end"
+                >
+                  İlgili sayfaya git
+                  <ArrowRight aria-hidden="true" className="size-4" />
+                </Link>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </Card>
   );
 }

@@ -28,3 +28,21 @@ export interface AdminAnalytics {
   userRoleDistribution: DistributionPoint<UserRole>[];
   mostLikedIdeas: PopularIdeaPoint[];
 }
+
+export const ADMIN_ACTIVITY_TYPES = [
+  "idea_created",
+  "support_requested",
+  "user_registered",
+  "comment_created",
+] as const;
+
+export type AdminActivityType = (typeof ADMIN_ACTIVITY_TYPES)[number];
+
+export interface AdminActivity {
+  id: string;
+  type: AdminActivityType;
+  userName: string;
+  relatedTitle: string;
+  createdAt: string;
+  href: `/${string}`;
+}
