@@ -10,6 +10,7 @@ export const mainNavigation = [
 ] as const;
 
 export const adminNavigation = [
+  { label: "Analytics", href: "/admin/analytics" },
   { label: "Genel Bakış", href: "/admin" },
   { label: "Hayaller", href: "/admin/hayaller" },
   { label: "Kullanıcılar", href: "/admin/kullanicilar" },

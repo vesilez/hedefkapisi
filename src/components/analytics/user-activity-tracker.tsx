@@ -22,7 +22,7 @@ export function UserActivityTracker() {
         return;
       }
       lastRecordedAt = now;
-      void recordUserActivity();
+      void recordUserActivity().catch(() => undefined);
     };
 
     record();
