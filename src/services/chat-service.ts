@@ -6,6 +6,7 @@ import { db } from "@/lib/firebase/firestore";
 import { getFirebaseErrorMessage } from "@/lib/firebase/firebase-error";
 import { chatMessageContentSchema } from "@/lib/validations/chat-schema";
 import { createNotification } from "@/services/notification-service";
+import { grantAchievementInTransaction } from "@/services/achievement-service";
 import type { Chat, ChatMessage } from "@/types/chat";
 import {
   collection,
@@ -28,8 +29,7 @@ import {
 import { z } from "zod";
 
 export type ChatServiceResult<T> =
-  | { success: true; data: T }
-  | { success: false; error: { message: string } };
+  { success: true; data: T } | { success: false; error: { message: string } };
 
 const timestampSchema = z.unknown().transform((value, context) => {
   if (
@@ -84,7 +84,8 @@ function messageFailure<T>(message: string): ChatServiceResult<T> {
 }
 
 function parseChat(
-  snapshot: QueryDocumentSnapshot<DocumentData> | DocumentSnapshot<DocumentData>,
+  snapshot:
+    QueryDocumentSnapshot<DocumentData> | DocumentSnapshot<DocumentData>,
 ): ChatServiceResult<Chat> {
   const parsed = chatSchema.safeParse({
     ...snapshot.data(),
@@ -124,10 +125,7 @@ async function authorizeChatRead(
     }
     const parsed = parseChat(chatSnapshot);
     if (!parsed.success) return parsed;
-    if (
-      !parsed.data.participantIds.includes(userId) &&
-      !isAdminRole(role)
-    ) {
+    if (!parsed.data.participantIds.includes(userId) && !isAdminRole(role)) {
       return messageFailure("Bu sohbeti görüntüleme yetkin yok.");
     }
     return { success: true, data: { chat: parsed.data, role } };
@@ -237,7 +235,10 @@ export async function markChatMessagesAsRead(
         !readBy.includes(userId)
       );
     });
-    if (unread.length === 0 && authorization.data.chat.unreadCounts[userId] === 0) {
+    if (
+      unread.length === 0 &&
+      authorization.data.chat.unreadCounts[userId] === 0
+    ) {
       return { success: true, data: undefined };
     }
 
@@ -271,7 +272,8 @@ export async function sendChatMessage(
     );
   }
   const senderId = auth.currentUser?.uid;
-  if (!senderId) return messageFailure("Mesaj göndermek için oturum açmalısın.");
+  if (!senderId)
+    return messageFailure("Mesaj göndermek için oturum açmalısın.");
 
   try {
     const messageReference = doc(collection(db, "chats", chatId, "messages"));
@@ -332,6 +334,12 @@ export async function sendChatMessage(
         updatedAt: serverTimestamp(),
         ...unreadUpdates,
       });
+      grantAchievementInTransaction(
+        transaction,
+        senderId,
+        userSnapshot.data(),
+        "first_chat",
+      );
       return {
         chat: parsedChat.data,
         senderName,

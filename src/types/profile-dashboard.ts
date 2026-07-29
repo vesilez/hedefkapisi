@@ -4,6 +4,7 @@ import type { CommentStatus } from "./comment";
 import type { SupportRequestStatus } from "./support-request";
 import type { SupportType } from "@/constants/support-types";
 import type { UserWithProfiles } from "./user";
+import type { UserAchievement } from "./achievement";
 
 export interface ProfileCommentActivity {
   id: string;
@@ -34,6 +35,7 @@ export interface ProfileDashboardStatistics {
 
 export interface ProfileDashboardData {
   profile: UserWithProfiles;
+  achievements: UserAchievement[];
   ideas: Idea[];
   favorites: FavoriteIdeaItem[];
   comments: ProfileCommentActivity[];

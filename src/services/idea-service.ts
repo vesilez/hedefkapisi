@@ -18,6 +18,7 @@ import {
   createNotification,
   notifyAllAdmins,
 } from "@/services/notification-service";
+import { grantAchievementInTransaction } from "@/services/achievement-service";
 import {
   IDEA_VISIBILITIES,
   type Idea,
@@ -38,7 +39,6 @@ import {
   query,
   runTransaction,
   serverTimestamp,
-  setDoc,
   Timestamp,
   where,
 } from "firebase/firestore";
@@ -262,40 +262,45 @@ export async function createIdea(
   const generatedSlug = slugify(validation.data.title);
 
   try {
-    const profile = await getDoc(doc(db, "users", studentId));
-    if (
-      !profile.exists() ||
-      profile.data().role !== "student" ||
-      profile.data().profileCompleted !== true
-    ) {
-      return {
-        success: false,
-        error: {
-          code: "idea/student-profile-required",
-          message: "Fikir paylaşmak için öğrenci profilinizi tamamlamalısınız.",
-        },
-      };
-    }
+    await runTransaction(db, async (transaction) => {
+      const profile = await transaction.get(doc(db, "users", studentId));
+      if (
+        !profile.exists() ||
+        profile.data().role !== "student" ||
+        profile.data().profileCompleted !== true
+      ) {
+        throw new Error("idea/student-profile-required");
+      }
 
-    await setDoc(ideaReference, {
-      id: ideaReference.id,
-      studentId,
-      ...editableData(validation.data),
-      slug: generatedSlug || `idea-${ideaReference.id.slice(0, 8)}`,
-      status: statusFromAction(input.submitAction),
-      adminNote: "",
-      rejectionReason: null,
-      revisionNote: null,
-      isFeatured: false,
-      viewCount: 0,
-      supportCount: 0,
-      likeCount: 0,
-      commentCount: 0,
-      publishedAt: null,
-      moderatedBy: null,
-      moderatedAt: null,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
+      transaction.set(ideaReference, {
+        id: ideaReference.id,
+        studentId,
+        ...editableData(validation.data),
+        slug: generatedSlug || `idea-${ideaReference.id.slice(0, 8)}`,
+        status: statusFromAction(input.submitAction),
+        adminNote: "",
+        rejectionReason: null,
+        revisionNote: null,
+        isFeatured: false,
+        viewCount: 0,
+        supportCount: 0,
+        likeCount: 0,
+        commentCount: 0,
+        publishedAt: null,
+        moderatedBy: null,
+        moderatedAt: null,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      if (input.submitAction === "submit_for_review") {
+        grantAchievementInTransaction(
+          transaction,
+          studentId,
+          profile.data(),
+          "first_dream",
+        );
+      }
     });
 
     const notification = await notifyAllAdmins({
@@ -310,6 +315,18 @@ export async function createIdea(
 
     return { success: true, data: { id: ideaReference.id } };
   } catch (error: unknown) {
+    if (
+      error instanceof Error &&
+      error.message === "idea/student-profile-required"
+    ) {
+      return {
+        success: false,
+        error: {
+          code: "idea/student-profile-required",
+          message: "Fikir paylaşmak için öğrenci profilinizi tamamlamalısınız.",
+        },
+      };
+    }
     return failure(error);
   }
 }
@@ -375,15 +392,16 @@ export async function updateIdea(
   const reference = doc(db, "ideas", ideaId);
   try {
     await runTransaction(db, async (transaction) => {
-      const snapshot = await transaction.get(reference);
+      const [snapshot, profile] = await Promise.all([
+        transaction.get(reference),
+        transaction.get(doc(db, "users", studentId)),
+      ]);
       if (!snapshot.exists() || snapshot.data().studentId !== studentId) {
         throw new Error("idea/not-found-or-forbidden");
       }
+      if (!profile.exists()) throw new Error("idea/not-found-or-forbidden");
       const currentStatus: unknown = snapshot.data().status;
-      if (
-        currentStatus !== "draft" &&
-        currentStatus !== "revision_requested"
-      ) {
+      if (currentStatus !== "draft" && currentStatus !== "revision_requested") {
         throw new Error("idea/not-editable");
       }
 
@@ -404,6 +422,14 @@ export async function updateIdea(
         moderatedAt: null,
         updatedAt: serverTimestamp(),
       });
+      if (submitAction === "submit_for_review") {
+        grantAchievementInTransaction(
+          transaction,
+          studentId,
+          profile.data(),
+          "first_dream",
+        );
+      }
     });
 
     return { success: true, data: undefined };
@@ -515,16 +541,10 @@ export async function getPublicIdeas(
   try {
     const [snapshots, comments] = await Promise.all([
       getDocs(
-        query(
-          collection(db, "ideas"),
-          where("status", "==", "approved"),
-        ),
+        query(collection(db, "ideas"), where("status", "==", "approved")),
       ),
       getDocs(
-        query(
-          collection(db, "comments"),
-          where("status", "==", "active"),
-        ),
+        query(collection(db, "comments"), where("status", "==", "active")),
       ),
     ]);
 
@@ -723,9 +743,7 @@ async function moderateIdea(
             ? snapshot.data().title
             : "Hayalin",
         slug:
-          typeof snapshot.data().slug === "string"
-            ? snapshot.data().slug
-            : "",
+          typeof snapshot.data().slug === "string" ? snapshot.data().slug : "",
       };
     });
 
@@ -744,8 +762,7 @@ async function moderateIdea(
           nextStatus === "approved"
             ? `"${moderatedIdea.title}" başlıklı hayalin onaylandı.`
             : `"${moderatedIdea.title}" başlıklı hayalin reddedildi.`,
-        type:
-          nextStatus === "approved" ? "idea_approved" : "idea_rejected",
+        type: nextStatus === "approved" ? "idea_approved" : "idea_rejected",
         targetUrl:
           nextStatus === "approved" && moderatedIdea.slug
             ? `/hayaller/${moderatedIdea.slug}`

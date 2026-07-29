@@ -6,6 +6,7 @@ import { auth } from "@/lib/firebase/auth";
 import { db } from "@/lib/firebase/firestore";
 import { getFirebaseErrorMessage } from "@/lib/firebase/firebase-error";
 import { createNotification } from "@/services/notification-service";
+import { grantAchievementInTransaction } from "@/services/achievement-service";
 import type {
   FavoriteIdeaItem,
   IdeaEngagementState,
@@ -25,8 +26,7 @@ import {
 import { z } from "zod";
 
 export type IdeaEngagementResult<T> =
-  | { success: true; data: T }
-  | { success: false; error: { message: string } };
+  { success: true; data: T } | { success: false; error: { message: string } };
 
 const timestampSchema = z.unknown().transform((value, context) => {
   if (
@@ -143,9 +143,7 @@ export function subscribeToIdeaEngagement(
 
 export async function toggleIdeaLike(
   ideaId: string,
-): Promise<
-  IdeaEngagementResult<{ isLiked: boolean; likeCount: number }>
-> {
+): Promise<IdeaEngagementResult<{ isLiked: boolean; likeCount: number }>> {
   const userId = auth.currentUser?.uid;
   if (!userId) return messageFailure("Beğenmek için giriş yapmalısınız.");
 
@@ -157,13 +155,18 @@ export async function toggleIdeaLike(
       engagementDocumentId(ideaId, userId),
     );
     const result = await runTransaction(db, async (transaction) => {
-      const [idea, like] = await Promise.all([
-        transaction.get(ideaReference),
-        transaction.get(likeReference),
-      ]);
+      const idea = await transaction.get(ideaReference);
       if (!idea.exists() || idea.data().status !== "approved") {
         throw new Error("engagement/idea-not-available");
       }
+      const ownerId =
+        typeof idea.data().studentId === "string" ? idea.data().studentId : "";
+      const [like, owner] = await Promise.all([
+        transaction.get(likeReference),
+        ownerId
+          ? transaction.get(doc(db, "users", ownerId))
+          : Promise.resolve(null),
+      ]);
 
       const rawCount: unknown = idea.data().likeCount;
       const currentCount =
@@ -184,14 +187,19 @@ export async function toggleIdeaLike(
         transaction.delete(likeReference);
       }
       transaction.update(ideaReference, { likeCount });
+      if (isLiked && currentCount === 0 && owner?.exists()) {
+        grantAchievementInTransaction(
+          transaction,
+          ownerId,
+          owner.data(),
+          "first_like",
+        );
+      }
 
       return {
         isLiked,
         likeCount,
-        ownerId:
-          typeof idea.data().studentId === "string"
-            ? idea.data().studentId
-            : "",
+        ownerId,
         title:
           typeof idea.data().title === "string" ? idea.data().title : "Hayal",
         slug: typeof idea.data().slug === "string" ? idea.data().slug : "",
@@ -204,9 +212,7 @@ export async function toggleIdeaLike(
         title: "Hayalin beğenildi",
         message: `"${result.title}" başlıklı hayalin beğenildi.`,
         type: "idea_liked",
-        targetUrl: result.slug
-          ? `/hayaller/${result.slug}`
-          : "/fikirlerim",
+        targetUrl: result.slug ? `/hayaller/${result.slug}` : "/fikirlerim",
       });
       if (!notification.success) {
         console.error(
@@ -235,7 +241,8 @@ export async function toggleIdeaFavorite(
   ideaId: string,
 ): Promise<IdeaEngagementResult<{ isFavorite: boolean }>> {
   const userId = auth.currentUser?.uid;
-  if (!userId) return messageFailure("Favorilere eklemek için giriş yapmalısınız.");
+  if (!userId)
+    return messageFailure("Favorilere eklemek için giriş yapmalısınız.");
 
   try {
     const ideaReference = doc(db, "ideas", ideaId);

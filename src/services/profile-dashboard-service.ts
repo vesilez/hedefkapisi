@@ -7,6 +7,7 @@ import { getFavoriteIdeas } from "@/services/idea-engagement-service";
 import { getIdeasByStudent } from "@/services/idea-service";
 import { getSupportRequestsByUser } from "@/services/support-request-service";
 import { getUserProfile } from "@/services/user-service";
+import { parseAchievements } from "@/services/achievement-service";
 import type {
   ProfileCommentActivity,
   ProfileDashboardData,
@@ -26,23 +27,24 @@ export async function getProfileDashboard(
   userId: string,
 ): Promise<ProfileDashboardResult> {
   if (!userId || auth.currentUser?.uid !== userId) {
-    return failure("Profil faaliyetlerini görüntülemek için giriş yapmalısınız.");
+    return failure(
+      "Profil faaliyetlerini görüntülemek için giriş yapmalısınız.",
+    );
   }
 
-  const [profile, ideas, favorites, comments, supportRequests] =
+  const [profile, ideas, favorites, comments, supportRequests, userDocument] =
     await Promise.all([
       getUserProfile(userId),
       getIdeasByStudent(userId),
       getFavoriteIdeas(userId),
       getIdeaCommentsByUser(userId),
       getSupportRequestsByUser(userId),
+      getDoc(doc(db, "users", userId)),
     ]);
 
   if (!profile.success || !profile.data) {
     return failure(
-      profile.success
-        ? "Profil kaydınız bulunamadı."
-        : profile.error.message,
+      profile.success ? "Profil kaydınız bulunamadı." : profile.error.message,
     );
   }
   if (!ideas.success) return failure(ideas.error.message);
@@ -96,8 +98,8 @@ export async function getProfileDashboard(
       };
     },
   );
-  const supportActivities: ProfileSupportActivity[] =
-    supportRequests.data.map((request) => {
+  const supportActivities: ProfileSupportActivity[] = supportRequests.data.map(
+    (request) => {
       const idea = ideaSummaries.get(request.ideaId);
       return {
         id: request.id,
@@ -108,12 +110,16 @@ export async function getProfileDashboard(
         ideaTitle: idea?.title ?? "Hayal bulunamadı",
         ideaSlug: idea?.slug ?? null,
       };
-    });
+    },
+  );
 
   return {
     success: true,
     data: {
       profile: profile.data,
+      achievements: userDocument.exists()
+        ? parseAchievements(userDocument.data())
+        : [],
       ideas: ideas.data,
       favorites: favorites.data,
       comments: commentActivities,

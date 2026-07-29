@@ -9,6 +9,7 @@ import { IDEA_STATUS_LABELS } from "@/constants/idea-statuses";
 import { isAdminRole, USER_ROLE_LABELS } from "@/constants/roles";
 import { SUPPORT_REQUEST_STATUS_LABELS } from "@/constants/support-request-statuses";
 import { SUPPORT_TYPE_LABELS } from "@/constants/support-types";
+import { ACHIEVEMENTS, type AchievementId } from "@/constants/achievements";
 import { useAuth } from "@/hooks/use-auth";
 import { getProfileDashboard } from "@/services/profile-dashboard-service";
 import { getUserAccessProfile } from "@/services/user-service";
@@ -17,10 +18,15 @@ import {
   Bookmark,
   CheckCircle2,
   Heart,
+  Handshake,
   Lightbulb,
+  Medal,
   MessageCircle,
   Pencil,
   Send,
+  Sparkles,
+  ThumbsUp,
+  Trophy,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -34,6 +40,7 @@ const TABS = [
   "favorites",
   "comments",
   "supports",
+  "achievements",
 ] as const;
 type ProfileTab = (typeof TABS)[number];
 
@@ -43,6 +50,7 @@ const TAB_LABELS: Record<ProfileTab, string> = {
   favorites: "Favorilerim",
   comments: "Yorumlarım",
   supports: "Desteklerim",
+  achievements: "Başarılarım",
 };
 
 type ViewState = "loading" | "ready" | "error";
@@ -188,6 +196,7 @@ export function ProfileDashboard() {
         {activeTab === "favorites" && <FavoriteIdeas />}
         {activeTab === "comments" && <CommentsTab data={data} />}
         {activeTab === "supports" && <SupportsTab data={data} />}
+        {activeTab === "achievements" && <AchievementsTab data={data} />}
       </div>
     </div>
   );
@@ -295,6 +304,127 @@ function OverviewTab({ data }: { data: ProfileDashboardData }) {
         </Card>
       ))}
     </div>
+  );
+}
+
+const ACHIEVEMENT_STYLES: Record<
+  AchievementId,
+  {
+    icon: typeof Trophy;
+    accent: string;
+    iconBackground: string;
+  }
+> = {
+  first_dream: {
+    icon: Sparkles,
+    accent: "from-violet-500 to-fuchsia-500",
+    iconBackground: "bg-violet-100 text-violet-700",
+  },
+  first_like: {
+    icon: ThumbsUp,
+    accent: "from-rose-500 to-pink-500",
+    iconBackground: "bg-rose-100 text-rose-700",
+  },
+  first_support: {
+    icon: Handshake,
+    accent: "from-amber-400 to-orange-500",
+    iconBackground: "bg-amber-100 text-amber-800",
+  },
+  first_chat: {
+    icon: MessageCircle,
+    accent: "from-blue-500 to-cyan-500",
+    iconBackground: "bg-blue-100 text-blue-700",
+  },
+};
+
+function formatAchievementDate(value: string): string {
+  return new Intl.DateTimeFormat("tr-TR", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
+function AchievementsTab({ data }: { data: ProfileDashboardData }) {
+  const earnedAchievements = new Map(
+    data.achievements.map((achievement) => [achievement.id, achievement]),
+  );
+
+  return (
+    <section aria-labelledby="achievements-title">
+      <div className="mb-5 flex flex-col gap-3 rounded-2xl bg-gradient-to-r from-blue-950 to-blue-800 p-5 text-white sm:flex-row sm:items-center sm:justify-between sm:p-6">
+        <div>
+          <p className="flex items-center gap-2 text-sm font-semibold text-blue-100">
+            <Trophy aria-hidden="true" className="size-4" />
+            Yolculuğundaki kilometre taşları
+          </p>
+          <h2 id="achievements-title" className="mt-1 text-2xl font-extrabold">
+            Başarılarım
+          </h2>
+        </div>
+        <div className="flex items-center gap-2 self-start rounded-full bg-white/15 px-4 py-2 text-sm font-bold sm:self-auto">
+          <Medal aria-hidden="true" className="size-4 text-amber-300" />
+          {data.achievements.length}/{ACHIEVEMENTS.length} rozet
+        </div>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {ACHIEVEMENTS.map((achievement) => {
+          const earned = earnedAchievements.get(achievement.id);
+          const style = ACHIEVEMENT_STYLES[achievement.id];
+          const Icon = style.icon;
+
+          return (
+            <article
+              key={achievement.id}
+              className={`relative overflow-hidden rounded-2xl border bg-white p-5 shadow-sm ${
+                earned
+                  ? "border-slate-200"
+                  : "border-dashed border-slate-300 opacity-70"
+              }`}
+            >
+              <span
+                aria-hidden="true"
+                className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${style.accent} ${
+                  earned ? "" : "grayscale"
+                }`}
+              />
+              <div className="flex items-start justify-between gap-3">
+                <span
+                  className={`flex size-12 items-center justify-center rounded-2xl ${
+                    earned
+                      ? style.iconBackground
+                      : "bg-slate-100 text-slate-400"
+                  }`}
+                >
+                  <Icon aria-hidden="true" className="size-6" />
+                </span>
+                <span
+                  className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${
+                    earned
+                      ? "bg-emerald-100 text-emerald-800"
+                      : "bg-slate-100 text-slate-500"
+                  }`}
+                >
+                  {earned ? "Kazanıldı" : "Henüz kilitli"}
+                </span>
+              </div>
+              <h3 className="mt-5 font-extrabold text-slate-950">
+                {achievement.title}
+              </h3>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                {achievement.description}
+              </p>
+              <p className="mt-4 border-t border-slate-100 pt-3 text-xs font-semibold text-slate-500">
+                {earned
+                  ? formatAchievementDate(earned.earnedAt)
+                  : "Başarıyı tamamladığında burada görünecek."}
+              </p>
+            </article>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -414,9 +544,7 @@ function SupportsTab({ data }: { data: ProfileDashboardData }) {
         <Card key={request.id} className="p-5">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="font-bold text-slate-950">{request.ideaTitle}</h3>
-            <Badge>
-              {SUPPORT_REQUEST_STATUS_LABELS[request.status]}
-            </Badge>
+            <Badge>{SUPPORT_REQUEST_STATUS_LABELS[request.status]}</Badge>
           </div>
           <p className="mt-3 text-sm text-slate-600">
             {request.supportTypes

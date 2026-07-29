@@ -11,6 +11,7 @@ import {
   createNotification,
   notifyAllAdmins,
 } from "@/services/notification-service";
+import { grantAchievementInTransaction } from "@/services/achievement-service";
 import type {
   CreateSupportRequestInput,
   SupportRequest,
@@ -33,8 +34,7 @@ import {
 import { z } from "zod";
 
 export type SupportRequestServiceResult<T> =
-  | { success: true; data: T }
-  | { success: false; error: { message: string } };
+  { success: true; data: T } | { success: false; error: { message: string } };
 
 export interface AdminSupportRequestListItem {
   request: SupportRequest;
@@ -122,14 +122,17 @@ function parseRequests(
   return { success: true, data: requests };
 }
 
-async function ensureAdmin(adminId: string): Promise<SupportRequestServiceResult<void>> {
+async function ensureAdmin(
+  adminId: string,
+): Promise<SupportRequestServiceResult<void>> {
   if (!adminId || auth.currentUser?.uid !== adminId) {
     return messageFailure("Bu işlem için yetkiniz yok.");
   }
   try {
     const profile = await getDoc(doc(db, "users", adminId));
     const rawRole: unknown = profile.exists() ? profile.data().role : null;
-    const role = typeof rawRole === "string" ? rawRole.trim().toLowerCase() : rawRole;
+    const role =
+      typeof rawRole === "string" ? rawRole.trim().toLowerCase() : rawRole;
     return isAdminRole(role)
       ? { success: true, data: undefined }
       : messageFailure("Bu işlem için yetkiniz yok.");
@@ -149,7 +152,8 @@ export async function createSupportRequest(
   }
 
   const supporterId = auth.currentUser?.uid;
-  if (!supporterId) return messageFailure("Başvuru yapmak için giriş yapmalısınız.");
+  if (!supporterId)
+    return messageFailure("Başvuru yapmak için giriş yapmalısınız.");
 
   try {
     const [profile, idea, duplicates] = await Promise.all([
@@ -166,16 +170,20 @@ export async function createSupportRequest(
       ),
     ]);
 
-    if (!profile.exists()) return messageFailure("Kullanıcı profili bulunamadı.");
+    if (!profile.exists())
+      return messageFailure("Kullanıcı profili bulunamadı.");
     const rawRole: unknown = profile.data().role;
-    const role = typeof rawRole === "string" ? rawRole.trim().toLowerCase() : rawRole;
+    const role =
+      typeof rawRole === "string" ? rawRole.trim().toLowerCase() : rawRole;
     if (role !== "supporter" && role !== "mentor") {
       return messageFailure(
         "Bu fikir için destek başvurusu yalnızca destekçi veya mentor hesaplarıyla yapılabilir.",
       );
     }
     if (profile.data().profileCompleted !== true) {
-      return messageFailure("Başvuru yapmadan önce profilinizi tamamlamalısınız.");
+      return messageFailure(
+        "Başvuru yapmadan önce profilinizi tamamlamalısınız.",
+      );
     }
     if (
       !idea.exists() ||
@@ -320,10 +328,7 @@ export async function getAdminSupportRequests(
     const supporterIds = [
       ...new Set(parsedRequests.data.map((request) => request.supporterId)),
     ];
-    const applicants = new Map<
-      string,
-      { name: string; email: string }
-    >();
+    const applicants = new Map<string, { name: string; email: string }>();
 
     await Promise.all(
       supporterIds.map(async (supporterId) => {
@@ -369,9 +374,7 @@ export async function getAdminSupportRequests(
 
 export async function getAdminSupportRequestStatistics(
   adminId: string,
-): Promise<
-  SupportRequestServiceResult<AdminSupportRequestStatistics>
-> {
+): Promise<SupportRequestServiceResult<AdminSupportRequestStatistics>> {
   const authorization = await ensureAdmin(adminId);
   if (!authorization.success) return authorization;
 
@@ -425,11 +428,13 @@ async function reviewSupportRequest(
           }
           const ideaReference = doc(db, "ideas", ideaId);
           const chatReference = doc(db, "chats", requestId);
-          const [ideaSnapshot, chatSnapshot] = await Promise.all([
-            transaction.get(ideaReference),
-            transaction.get(chatReference),
-          ]);
-          if (!ideaSnapshot.exists()) {
+          const [ideaSnapshot, chatSnapshot, supporterSnapshot] =
+            await Promise.all([
+              transaction.get(ideaReference),
+              transaction.get(chatReference),
+              transaction.get(doc(db, "users", supporterId)),
+            ]);
+          if (!ideaSnapshot.exists() || !supporterSnapshot.exists()) {
             throw new Error("support-request/idea-not-found");
           }
           const ownerId: unknown = ideaSnapshot.data().studentId;
@@ -463,6 +468,12 @@ async function reviewSupportRequest(
               },
             });
           }
+          grantAchievementInTransaction(
+            transaction,
+            supporterId,
+            supporterSnapshot.data(),
+            "first_support",
+          );
         }
 
         transaction.update(reference, {
@@ -504,8 +515,8 @@ async function reviewSupportRequest(
         status === "approved" && reviewedSupportRequest.chatId
           ? (`/mesajlar?sohbet=${reviewedSupportRequest.chatId}` as const)
           : typeof reviewedIdeaSlug === "string" && reviewedIdeaSlug
-          ? (`/hayaller/${reviewedIdeaSlug}` as const)
-          : ("/profil?sekme=destekler" as const);
+            ? (`/hayaller/${reviewedIdeaSlug}` as const)
+            : ("/profil?sekme=destekler" as const);
       const notification = await createNotification({
         userId: reviewedSupportRequest.supporterId,
         title:
@@ -532,7 +543,10 @@ async function reviewSupportRequest(
 
     return { success: true, data: undefined };
   } catch (error: unknown) {
-    if (error instanceof Error && error.message === "support-request/not-pending") {
+    if (
+      error instanceof Error &&
+      error.message === "support-request/not-pending"
+    ) {
       return messageFailure("Bu başvuru artık değerlendirme beklemiyor.");
     }
     if (
