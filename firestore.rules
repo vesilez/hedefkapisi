@@ -1,0 +1,392 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function currentUser() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function roleIs(role) {
+      return signedIn() && currentUser().data.role == role;
+    }
+
+    function isAdmin() {
+      return roleIs("admin") || roleIs("superadmin");
+    }
+
+    function isSuperAdmin() {
+      return roleIs("superadmin");
+    }
+
+    function validTimestamp(value) {
+      return value is timestamp && value <= request.time;
+    }
+
+    function validAchievement(value) {
+      return value is map
+        && value.keys().hasOnly(["unlocked", "unlockedAt"])
+        && value.unlocked == true
+        && validTimestamp(value.unlockedAt);
+    }
+
+    function validAchievements(data) {
+      let achievements = data.get("achievements", {});
+      return achievements is map
+        && achievements.keys().hasOnly([
+          "first_dream",
+          "first_like",
+          "first_support",
+          "first_chat"
+        ])
+        && (!("first_dream" in achievements) || validAchievement(achievements.first_dream))
+        && (!("first_like" in achievements) || validAchievement(achievements.first_like))
+        && (!("first_support" in achievements) || validAchievement(achievements.first_support))
+        && (!("first_chat" in achievements) || validAchievement(achievements.first_chat));
+    }
+
+    function validAchievementBackfill() {
+      let before = resource.data.get("achievements", {});
+      let after = request.resource.data.get("achievements", {});
+      return request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(["achievements"])
+        && validAchievements(request.resource.data)
+        && after.keys().hasAll(before.keys())
+        && after.diff(before).removedKeys().size() == 0;
+    }
+
+    match /users/{userId} {
+      allow create: if signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.id == userId
+        && request.resource.data.role in ["student", "supporter", "mentor"]
+        && request.resource.data.status == "active"
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.emailVerified == request.auth.token.email_verified
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.keys().hasOnly([
+          "id", "role", "name", "surname", "email", "phone", "city",
+          "status", "profileCompleted", "emailVerified", "avatarUrl",
+          "createdAt", "updatedAt"
+        ]);
+
+      allow read: if signedIn() && (request.auth.uid == userId || isAdmin());
+
+      allow update: if signedIn() && (
+        (
+          request.auth.uid == userId
+          && (
+            (
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                "name", "surname", "phone", "city", "profileCompleted",
+                "avatarUrl", "studentProfile", "supporterProfile",
+                "mentorProfile", "updatedAt"
+              ])
+              && request.resource.data.id == resource.data.id
+              && request.resource.data.role == resource.data.role
+              && request.resource.data.status == resource.data.status
+              && request.resource.data.email == resource.data.email
+              && request.resource.data.emailVerified == resource.data.emailVerified
+              && request.resource.data.get("achievements", {}) == resource.data.get("achievements", {})
+            )
+            || validAchievementBackfill()
+          )
+        )
+        || (
+          isAdmin()
+          && request.auth.uid != userId
+          && (
+            (
+              request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(["role", "status", "updatedAt"])
+              && (isSuperAdmin() || (
+                resource.data.role != "superadmin"
+                && request.resource.data.role != "superadmin"
+              ))
+            )
+            || validAchievementBackfill()
+          )
+        )
+      );
+
+      allow delete: if isSuperAdmin() && request.auth.uid != userId;
+    }
+
+    match /ideas/{ideaId} {
+      function isOwner() {
+        return signedIn() && resource.data.studentId == request.auth.uid;
+      }
+
+      function validOwnerCreate() {
+        return signedIn()
+          && roleIs("student")
+          && request.resource.data.id == ideaId
+          && request.resource.data.studentId == request.auth.uid
+          && request.resource.data.status in ["draft", "pending"]
+          && request.resource.data.likeCount == 0
+          && request.resource.data.supportCount == 0
+          && request.resource.data.commentCount == 0
+          && request.resource.data.moderatedBy == null
+          && request.resource.data.moderatedAt == null;
+      }
+
+      function ownerEdit() {
+        return isOwner()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            "title", "slug", "shortDescription", "description", "problem",
+            "solution", "targetAudience", "categoryId", "city", "stage",
+            "supportNeeds", "visibility", "coverImageUrl", "attachmentUrls",
+            "prototypeUrl", "githubUrl", "websiteUrl", "rejectionReason",
+            "revisionNote", "publishedAt", "moderatedBy", "moderatedAt",
+            "updatedAt", "status"
+          ])
+          && request.resource.data.studentId == resource.data.studentId
+          && (
+            (resource.data.status == "draft" && request.resource.data.status in ["draft", "pending"])
+            || (resource.data.status == "revision_requested"
+              && request.resource.data.status in ["revision_requested", "pending"])
+          )
+          && request.resource.data.moderatedBy == null
+          && request.resource.data.moderatedAt == null
+          && request.resource.data.publishedAt == null;
+      }
+
+      function likeCountUpdate() {
+        let likeId = ideaId + "__" + request.auth.uid;
+        let likePath = /databases/$(database)/documents/likes/$(likeId);
+        return signedIn()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["likeCount"])
+          && (
+            (request.resource.data.likeCount == resource.data.likeCount + 1
+              && existsAfter(likePath)
+              && getAfter(likePath).data.ideaId == ideaId
+              && getAfter(likePath).data.userId == request.auth.uid)
+            || (request.resource.data.likeCount == resource.data.likeCount - 1
+              && !existsAfter(likePath))
+          )
+          && request.resource.data.likeCount >= 0;
+      }
+
+      function adminEdit() {
+        return isAdmin()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            "status", "adminNote", "rejectionReason", "revisionNote",
+            "publishedAt", "moderatedBy", "moderatedAt", "updatedAt"
+          ])
+          && request.resource.data.moderatedBy == request.auth.uid;
+      }
+
+      allow read: if resource.data.status == "approved" || isOwner() || isAdmin();
+      allow create: if validOwnerCreate();
+      allow update: if ownerEdit() || likeCountUpdate() || adminEdit();
+      allow delete: if isAdmin();
+    }
+
+    match /supportRequests/{requestId} {
+      function idea() {
+        return get(/databases/$(database)/documents/ideas/$(resource.data.ideaId));
+      }
+
+      allow create: if signedIn()
+        && currentUser().data.role in ["supporter", "mentor"]
+        && request.resource.data.keys().hasOnly([
+          "id", "ideaId", "supporterId", "supportTypes", "message", "status",
+          "adminNote", "reviewedBy", "reviewedAt", "createdAt", "updatedAt"
+        ])
+        && request.resource.data.id == requestId
+        && request.resource.data.supporterId == request.auth.uid
+        && request.resource.data.status == "pending"
+        && request.resource.data.reviewedBy == null
+        && request.resource.data.reviewedAt == null
+        && get(/databases/$(database)/documents/ideas/$(request.resource.data.ideaId)).data.status == "approved"
+        && get(/databases/$(database)/documents/ideas/$(request.resource.data.ideaId)).data.studentId != request.auth.uid;
+
+      allow read: if signedIn() && (
+        resource.data.supporterId == request.auth.uid
+        || idea().data.studentId == request.auth.uid
+        || isAdmin()
+      );
+
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "status", "adminNote", "reviewedBy", "reviewedAt", "updatedAt"
+        ])
+        && request.resource.data.status in ["approved", "rejected"]
+        && request.resource.data.reviewedBy == request.auth.uid
+        && request.resource.data.reviewedAt == request.time;
+
+      allow delete: if false;
+    }
+
+    match /comments/{commentId} {
+      allow read: if resource.data.status == "active" || isAdmin();
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          "id", "ideaId", "userId", "userName", "userRole", "content",
+          "createdAt", "updatedAt", "status"
+        ])
+        && request.resource.data.id == commentId
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.userRole == currentUser().data.role
+        && request.resource.data.status == "active"
+        && get(/databases/$(database)/documents/ideas/$(request.resource.data.ideaId)).data.status == "approved";
+      allow update: if signedIn() && (
+        (
+          resource.data.userId == request.auth.uid
+          && resource.data.status == "active"
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(["content", "updatedAt"])
+        )
+        || (
+          isAdmin()
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(["status", "updatedAt"])
+          && request.resource.data.status == "hidden"
+        )
+      );
+      allow delete: if signedIn()
+        && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    match /likes/{likeId} {
+      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          "id", "ideaId", "userId", "createdAt"
+        ])
+        && request.resource.data.id == likeId
+        && request.resource.data.userId == request.auth.uid
+        && likeId == request.resource.data.ideaId + "__" + request.auth.uid
+        && get(/databases/$(database)/documents/ideas/$(request.resource.data.ideaId)).data.status == "approved";
+      allow update: if false;
+      allow delete: if signedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    match /favorites/{favoriteId} {
+      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          "id", "ideaId", "userId", "createdAt"
+        ])
+        && request.resource.data.id == favoriteId
+        && request.resource.data.userId == request.auth.uid
+        && favoriteId == request.resource.data.ideaId + "__" + request.auth.uid
+        && get(/databases/$(database)/documents/ideas/$(request.resource.data.ideaId)).data.status == "approved";
+      allow update: if false;
+      allow delete: if signedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    match /notifications/{notificationId} {
+      function validNotificationSource() {
+        let type = request.resource.data.type;
+        let sourceId = request.resource.data.sourceId;
+        let actorId = request.resource.data.actorId;
+        let recipientId = request.resource.data.userId;
+        return (
+          (type == "idea_liked"
+            && get(/databases/$(database)/documents/likes/$(sourceId)).data.userId == actorId
+            && get(/databases/$(database)/documents/ideas/$(get(/databases/$(database)/documents/likes/$(sourceId)).data.ideaId)).data.studentId == recipientId)
+          || (type == "idea_comment"
+            && get(/databases/$(database)/documents/comments/$(sourceId)).data.userId == actorId
+            && get(/databases/$(database)/documents/ideas/$(get(/databases/$(database)/documents/comments/$(sourceId)).data.ideaId)).data.studentId == recipientId)
+          || (type == "support_request_received"
+            && get(/databases/$(database)/documents/supportRequests/$(sourceId)).data.supporterId == actorId
+            && get(/databases/$(database)/documents/ideas/$(get(/databases/$(database)/documents/supportRequests/$(sourceId)).data.ideaId)).data.studentId == recipientId)
+          || (type in ["idea_approved", "idea_rejected"]
+            && isAdmin()
+            && get(/databases/$(database)/documents/ideas/$(sourceId)).data.studentId == recipientId)
+          || (type in ["support_request_approved", "support_request_rejected"]
+            && isAdmin()
+            && get(/databases/$(database)/documents/supportRequests/$(sourceId)).data.supporterId == recipientId)
+          || (type == "chat_message"
+            && actorId in get(/databases/$(database)/documents/chats/$(sourceId)).data.participantIds
+            && recipientId in get(/databases/$(database)/documents/chats/$(sourceId)).data.participantIds
+            && actorId != recipientId)
+          || (type == "new_idea"
+            && get(/databases/$(database)/documents/ideas/$(sourceId)).data.studentId == actorId
+            && get(/databases/$(database)/documents/users/$(recipientId)).data.role in ["admin", "superadmin"])
+          || (type == "new_support_request"
+            && get(/databases/$(database)/documents/supportRequests/$(sourceId)).data.supporterId == actorId
+            && get(/databases/$(database)/documents/users/$(recipientId)).data.role in ["admin", "superadmin"])
+        );
+      }
+
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          "id", "userId", "actorId", "sourceId", "title", "message", "type",
+          "targetUrl", "isRead", "createdAt"
+        ])
+        && request.resource.data.id == notificationId
+        && request.resource.data.actorId == request.auth.uid
+        && request.resource.data.isRead == false
+        && request.resource.data.title is string
+        && request.resource.data.title.size() <= 120
+        && request.resource.data.message is string
+        && request.resource.data.message.size() <= 500
+        && validNotificationSource();
+      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+      allow update: if signedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["isRead"])
+        && request.resource.data.isRead == true;
+      allow delete: if false;
+    }
+
+    match /chats/{chatId} {
+      function participant() {
+        return signedIn() && request.auth.uid in resource.data.participantIds;
+      }
+
+      allow read: if participant() || isAdmin();
+      allow create: if isAdmin()
+        && request.resource.data.id == chatId
+        && request.resource.data.participantIds.size() == 2
+        && request.resource.data.ownerId in request.resource.data.participantIds
+        && request.resource.data.supporterId in request.resource.data.participantIds
+        && getAfter(/databases/$(database)/documents/supportRequests/$(request.resource.data.supportRequestId)).data.status == "approved";
+      allow update: if participant()
+        && request.resource.data.participantIds == resource.data.participantIds
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "lastMessage", "lastMessageAt", "updatedAt", "unreadCounts"
+        ]);
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        function chat() {
+          return get(/databases/$(database)/documents/chats/$(chatId));
+        }
+
+        allow read: if signedIn()
+          && (request.auth.uid in chat().data.participantIds || isAdmin());
+        allow create: if signedIn()
+          && !isAdmin()
+          && request.resource.data.keys().hasOnly([
+            "id", "chatId", "senderId", "senderName", "content",
+            "createdAt", "readBy"
+          ])
+          && request.auth.uid in chat().data.participantIds
+          && request.resource.data.id == messageId
+          && request.resource.data.chatId == chatId
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.readBy == [request.auth.uid]
+          && request.resource.data.content is string
+          && request.resource.data.content.size() > 0
+          && request.resource.data.content.size() <= 2000;
+        allow update: if signedIn()
+          && request.auth.uid in chat().data.participantIds
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["readBy"])
+          && request.resource.data.readBy.hasAll(resource.data.readBy)
+          && request.resource.data.readBy.hasAll([request.auth.uid]);
+        allow delete: if false;
+      }
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -7,7 +7,7 @@ import { getFavoriteIdeas } from "@/services/idea-engagement-service";
 import { getIdeasByStudent } from "@/services/idea-service";
 import { getSupportRequestsByUser } from "@/services/support-request-service";
 import { getUserProfile } from "@/services/user-service";
-import { parseAchievements } from "@/services/achievement-service";
+import { reconcileUserAchievements } from "@/services/achievement-service";
 import type {
   ProfileCommentActivity,
   ProfileDashboardData,
@@ -32,14 +32,13 @@ export async function getProfileDashboard(
     );
   }
 
-  const [profile, ideas, favorites, comments, supportRequests, userDocument] =
+  const [profile, ideas, favorites, comments, supportRequests] =
     await Promise.all([
       getUserProfile(userId),
       getIdeasByStudent(userId),
       getFavoriteIdeas(userId),
       getIdeaCommentsByUser(userId),
       getSupportRequestsByUser(userId),
-      getDoc(doc(db, "users", userId)),
     ]);
 
   if (!profile.success || !profile.data) {
@@ -52,6 +51,16 @@ export async function getProfileDashboard(
   if (!comments.success) return failure(comments.error.message);
   if (!supportRequests.success) {
     return failure(supportRequests.error.message);
+  }
+
+  let achievements;
+  try {
+    achievements = await reconcileUserAchievements(userId, {
+      ideas: ideas.data,
+      supportRequests: supportRequests.data,
+    });
+  } catch {
+    return failure("Başarılarınız hesaplanırken bir sorun oluştu.");
   }
 
   const ideaIds = [
@@ -117,9 +126,7 @@ export async function getProfileDashboard(
     success: true,
     data: {
       profile: profile.data,
-      achievements: userDocument.exists()
-        ? parseAchievements(userDocument.data())
-        : [],
+      achievements,
       ideas: ideas.data,
       favorites: favorites.data,
       comments: commentActivities,

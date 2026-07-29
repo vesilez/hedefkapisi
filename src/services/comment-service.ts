@@ -1,15 +1,17 @@
 import "client-only";
 
-import { isAdminRole, isUserRole, USER_ROLES, type UserRole } from "@/constants/roles";
+import {
+  isAdminRole,
+  isUserRole,
+  USER_ROLES,
+  type UserRole,
+} from "@/constants/roles";
 import { auth } from "@/lib/firebase/auth";
 import { db } from "@/lib/firebase/firestore";
 import { getFirebaseErrorMessage } from "@/lib/firebase/firebase-error";
 import { commentContentSchema } from "@/lib/validations/comment-schema";
 import { createNotification } from "@/services/notification-service";
-import {
-  COMMENT_STATUSES,
-  type IdeaComment,
-} from "@/types/comment";
+import { COMMENT_STATUSES, type IdeaComment } from "@/types/comment";
 import {
   collection,
   deleteDoc,
@@ -27,8 +29,7 @@ import {
 import { z } from "zod";
 
 export type CommentServiceResult<T> =
-  | { success: true; data: T }
-  | { success: false; error: { message: string } };
+  { success: true; data: T } | { success: false; error: { message: string } };
 
 const timestampSchema = z.unknown().transform((value, context) => {
   if (
@@ -81,8 +82,15 @@ export function subscribeToIdeaComments(
   viewerRole: UserRole | null,
   listener: (result: CommentServiceResult<IdeaComment[]>) => void,
 ): Unsubscribe {
+  const commentsQuery = isAdminRole(viewerRole)
+    ? query(collection(db, "comments"), where("ideaId", "==", ideaId))
+    : query(
+        collection(db, "comments"),
+        where("ideaId", "==", ideaId),
+        where("status", "==", "active"),
+      );
   return onSnapshot(
-    query(collection(db, "comments"), where("ideaId", "==", ideaId)),
+    commentsQuery,
     (snapshots) => {
       const comments: IdeaComment[] = [];
       for (const snapshot of snapshots.docs) {
@@ -120,7 +128,9 @@ export async function createIdeaComment(
 ): Promise<CommentServiceResult<IdeaComment>> {
   const validation = commentContentSchema.safeParse(content);
   if (!validation.success) {
-    return messageFailure(validation.error.issues[0]?.message ?? "Geçersiz yorum.");
+    return messageFailure(
+      validation.error.issues[0]?.message ?? "Geçersiz yorum.",
+    );
   }
 
   const userId = auth.currentUser?.uid;
@@ -148,7 +158,9 @@ export async function createIdeaComment(
             typeof value === "string" && value.trim().length > 0,
         )
         .map((value) => value.trim())
-        .join(" ") || auth.currentUser?.displayName || "Kullanıcı";
+        .join(" ") ||
+      auth.currentUser?.displayName ||
+      "Kullanıcı";
     const reference = doc(collection(db, "comments"));
     const now = new Date().toISOString();
 
@@ -169,6 +181,7 @@ export async function createIdeaComment(
     if (typeof ideaOwnerId === "string" && ideaOwnerId !== userId) {
       const notification = await createNotification({
         userId: ideaOwnerId,
+        sourceId: reference.id,
         title: "Hayaline yeni yorum geldi",
         message: `${userName}, "${typeof idea.data().title === "string" ? idea.data().title : "hayalin"}" için yorum yaptı.`,
         type: "idea_comment",
@@ -213,7 +226,11 @@ export async function getIdeaCommentsByUser(
 
   try {
     const snapshots = await getDocs(
-      query(collection(db, "comments"), where("userId", "==", userId)),
+      query(
+        collection(db, "comments"),
+        where("userId", "==", userId),
+        where("status", "==", "active"),
+      ),
     );
     const comments: IdeaComment[] = [];
     for (const snapshot of snapshots.docs) {
@@ -223,10 +240,13 @@ export async function getIdeaCommentsByUser(
         id: snapshot.id,
       });
       if (!parsed.success) {
-        console.error("[comment-service:getIdeaCommentsByUser] invalid comment", {
-          documentId: snapshot.id,
-          issues: parsed.error.issues,
-        });
+        console.error(
+          "[comment-service:getIdeaCommentsByUser] invalid comment",
+          {
+            documentId: snapshot.id,
+            issues: parsed.error.issues,
+          },
+        );
         return messageFailure("Yorumlar şu anda okunamıyor.");
       }
       comments.push(parsed.data);
@@ -246,7 +266,9 @@ export async function updateIdeaComment(
 ): Promise<CommentServiceResult<{ content: string; updatedAt: string }>> {
   const validation = commentContentSchema.safeParse(content);
   if (!validation.success) {
-    return messageFailure(validation.error.issues[0]?.message ?? "Geçersiz yorum.");
+    return messageFailure(
+      validation.error.issues[0]?.message ?? "Geçersiz yorum.",
+    );
   }
   const userId = auth.currentUser?.uid;
   if (!userId) return messageFailure("Bu işlem için giriş yapmalısınız.");

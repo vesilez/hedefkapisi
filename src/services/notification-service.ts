@@ -24,11 +24,11 @@ import {
 import { z } from "zod";
 
 export type NotificationServiceResult<T> =
-  | { success: true; data: T }
-  | { success: false; error: { message: string } };
+  { success: true; data: T } | { success: false; error: { message: string } };
 
 export interface CreateNotificationInput {
   userId: string;
+  sourceId: string;
   title: string;
   message: string;
   type: NotificationType;
@@ -58,7 +58,11 @@ const notificationSchema = z.object({
   title: z.string(),
   message: z.string(),
   type: z.enum(NOTIFICATION_TYPES),
-  targetUrl: z.string().regex(/^\/(?!\/)/).nullable().default(null),
+  targetUrl: z
+    .string()
+    .regex(/^\/(?!\/)/)
+    .nullable()
+    .default(null),
   isRead: z.boolean(),
   createdAt: timestampSchema,
 });
@@ -71,8 +75,12 @@ function failure<T>(error: unknown): NotificationServiceResult<T> {
 }
 
 function notificationData(input: CreateNotificationInput) {
+  const actorId = auth.currentUser?.uid;
+  if (!actorId) throw new Error("notification/unauthenticated");
   return {
     userId: input.userId,
+    actorId,
+    sourceId: input.sourceId,
     title: input.title,
     message: input.message,
     type: input.type,
@@ -126,10 +134,7 @@ export function subscribeToNotifications(
   listener: (result: NotificationServiceResult<Notification[]>) => void,
 ): Unsubscribe {
   return onSnapshot(
-    query(
-      collection(db, "notifications"),
-      where("userId", "==", userId),
-    ),
+    query(collection(db, "notifications"), where("userId", "==", userId)),
     (snapshots) => {
       const notifications: Notification[] = [];
       for (const snapshot of snapshots.docs) {

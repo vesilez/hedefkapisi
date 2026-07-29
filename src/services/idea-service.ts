@@ -304,6 +304,7 @@ export async function createIdea(
     });
 
     const notification = await notifyAllAdmins({
+      sourceId: ideaReference.id,
       title: "Yeni hayal oluşturuldu",
       message: `"${validation.data.title}" başlıklı yeni bir hayal oluşturuldu.`,
       type: "new_idea",
@@ -754,6 +755,7 @@ async function moderateIdea(
     ) {
       const notification = await createNotification({
         userId: moderatedIdea.studentId,
+        sourceId: ideaId,
         title:
           nextStatus === "approved"
             ? "Hayalin onaylandı"

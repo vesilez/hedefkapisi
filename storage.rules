@@ -1,0 +1,57 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function owner(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role
+          in ["admin", "superadmin"];
+    }
+
+    function validImage(maxBytes) {
+      return request.resource != null
+        && request.resource.size <= maxBytes
+        && request.resource.contentType.matches("image/(jpeg|png|webp)");
+    }
+
+    function validDocument(maxBytes) {
+      return request.resource != null
+        && request.resource.size <= maxBytes
+        && (
+          request.resource.contentType == "application/pdf"
+          || request.resource.contentType.matches("image/(jpeg|png|webp)")
+        );
+    }
+
+    match /public/avatars/{userId}/{fileName} {
+      allow read: if true;
+      allow create, update: if owner(userId) && validImage(5 * 1024 * 1024);
+      allow delete: if owner(userId) || isAdmin();
+    }
+
+    match /public/ideas/{userId}/{ideaId}/{fileName} {
+      allow read: if true;
+      allow create, update: if owner(userId) && validImage(8 * 1024 * 1024);
+      allow delete: if owner(userId) || isAdmin();
+    }
+
+    match /private/{userId}/{allPaths=**} {
+      allow read: if owner(userId) || isAdmin();
+      allow create, update: if owner(userId)
+        && validDocument(10 * 1024 * 1024);
+      allow delete: if owner(userId) || isAdmin();
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

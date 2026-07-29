@@ -6,7 +6,6 @@ import { auth } from "@/lib/firebase/auth";
 import { db } from "@/lib/firebase/firestore";
 import { getFirebaseErrorMessage } from "@/lib/firebase/firebase-error";
 import { createNotification } from "@/services/notification-service";
-import { grantAchievementInTransaction } from "@/services/achievement-service";
 import type {
   FavoriteIdeaItem,
   IdeaEngagementState,
@@ -161,12 +160,7 @@ export async function toggleIdeaLike(
       }
       const ownerId =
         typeof idea.data().studentId === "string" ? idea.data().studentId : "";
-      const [like, owner] = await Promise.all([
-        transaction.get(likeReference),
-        ownerId
-          ? transaction.get(doc(db, "users", ownerId))
-          : Promise.resolve(null),
-      ]);
+      const like = await transaction.get(likeReference);
 
       const rawCount: unknown = idea.data().likeCount;
       const currentCount =
@@ -187,18 +181,10 @@ export async function toggleIdeaLike(
         transaction.delete(likeReference);
       }
       transaction.update(ideaReference, { likeCount });
-      if (isLiked && currentCount === 0 && owner?.exists()) {
-        grantAchievementInTransaction(
-          transaction,
-          ownerId,
-          owner.data(),
-          "first_like",
-        );
-      }
-
       return {
         isLiked,
         likeCount,
+        likeId: likeReference.id,
         ownerId,
         title:
           typeof idea.data().title === "string" ? idea.data().title : "Hayal",
@@ -209,6 +195,7 @@ export async function toggleIdeaLike(
     if (result.isLiked && result.ownerId && result.ownerId !== userId) {
       const notification = await createNotification({
         userId: result.ownerId,
+        sourceId: result.likeId,
         title: "Hayalin beğenildi",
         message: `"${result.title}" başlıklı hayalin beğenildi.`,
         type: "idea_liked",

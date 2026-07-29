@@ -226,6 +226,7 @@ export async function createSupportRequest(
     if (typeof ideaOwnerId === "string" && ideaOwnerId) {
       const ownerNotification = await createNotification({
         userId: ideaOwnerId,
+        sourceId: reference.id,
         title: "Yeni destek başvurusu",
         message: `"${typeof ideaTitle === "string" ? ideaTitle : "Hayalin"}" için yeni bir destek başvurusu geldi.`,
         type: "support_request_received",
@@ -240,6 +241,7 @@ export async function createSupportRequest(
     }
 
     const adminNotification = await notifyAllAdmins({
+      sourceId: reference.id,
       title: "Yeni destek başvurusu",
       message: `"${typeof ideaTitle === "string" ? ideaTitle : "Bir hayal"}" için yeni bir destek başvurusu geldi.`,
       type: "new_support_request",
@@ -519,6 +521,7 @@ async function reviewSupportRequest(
             : ("/profil?sekme=destekler" as const);
       const notification = await createNotification({
         userId: reviewedSupportRequest.supporterId,
+        sourceId: requestId,
         title:
           status === "approved"
             ? "Destek başvurun onaylandı"

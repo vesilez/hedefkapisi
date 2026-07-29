@@ -351,6 +351,7 @@ export async function sendChatMessage(
       result.recipientIds.map((recipientId) =>
         createNotification({
           userId: recipientId,
+          sourceId: chatId,
           title: "Yeni mesaj",
           message: `${result.senderName}, "${result.chat.ideaTitle}" sohbetine yeni bir mesaj gönderdi.`,
           type: "chat_message",
