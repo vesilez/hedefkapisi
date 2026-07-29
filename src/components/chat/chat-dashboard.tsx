@@ -16,6 +16,7 @@ import { getUserAccessProfile } from "@/services/user-service";
 import type { Chat, ChatMessage } from "@/types/chat";
 import {
   ArrowLeft,
+  Circle,
   LoaderCircle,
   MessageCircle,
   Send,
@@ -34,16 +35,35 @@ type PageState = "loading" | "ready" | "error";
 
 function formatChatDate(value: string | null): string {
   if (!value) return "Yeni sohbet";
+  const date = new Date(value);
+  const today = new Date();
+  const isToday = date.toDateString() === today.toDateString();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+
+  if (isToday) {
+    return new Intl.DateTimeFormat("tr-TR", {
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(date);
+  }
+  if (date.toDateString() === yesterday.toDateString()) return "Dün";
   return new Intl.DateTimeFormat("tr-TR", {
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(new Date(value));
+    day: "2-digit",
+    month: "short",
+  }).format(date);
 }
 
 function formatMessageTime(value: string): string {
   return new Intl.DateTimeFormat("tr-TR", {
     hour: "2-digit",
     minute: "2-digit",
+  }).format(new Date(value));
+}
+
+function formatMessageDate(value: string): string {
+  return new Intl.DateTimeFormat("tr-TR", {
+    dateStyle: "long",
   }).format(new Date(value));
 }
 
@@ -64,6 +84,7 @@ export function ChatDashboard() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (authLoading) return;
@@ -111,6 +132,16 @@ export function ChatDashboard() {
     () => chats.find((chat) => chat.id === activeChatId) ?? null,
     [activeChatId, chats],
   );
+  const totalUnread = useMemo(
+    () =>
+      user
+        ? chats.reduce(
+            (total, chat) => total + (chat.unreadCounts[user.id] ?? 0),
+            0,
+          )
+        : 0,
+    [chats, user],
+  );
 
   useEffect(() => {
     if (!user || !activeChatId || !selectedChat) return;
@@ -143,6 +174,12 @@ export function ChatDashboard() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    if (selectedChat && !isAdminRole(role)) {
+      composerRef.current?.focus({ preventScroll: true });
+    }
+  }, [role, selectedChat]);
 
   useEffect(() => {
     if (
@@ -240,19 +277,35 @@ export function ChatDashboard() {
         </p>
       )}
 
-      <div className="grid min-h-[65dvh] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:grid-cols-[22rem_1fr]">
+      <div className="grid h-[clamp(34rem,68dvh,48rem)] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:grid-cols-[22rem_minmax(0,1fr)]">
         <aside
-          className={`min-h-0 border-r border-slate-200 ${
+          className={`min-h-0 lg:border-r lg:border-slate-200 ${
             selectedChat ? "hidden lg:flex" : "flex"
           } flex-col`}
           aria-label="Sohbet listesi"
         >
-          <div className="border-b border-slate-200 p-4">
-            <h2 className="font-bold text-slate-950">Sohbetlerim</h2>
-            <p className="mt-1 text-xs text-slate-500">
-              {chats.length} görüşme
-            </p>
+          <div className="flex items-center justify-between gap-4 border-b border-slate-200 p-4">
+            <div>
+              <h2 className="font-bold text-slate-950">Sohbetlerim</h2>
+              <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-500">
+                <Circle
+                  aria-hidden="true"
+                  className="size-2 fill-emerald-500 text-emerald-500"
+                />
+                Canlı · {chats.length} görüşme
+              </p>
+            </div>
+            {totalUnread > 0 && (
+              <span className="rounded-full bg-blue-700 px-2.5 py-1 text-xs font-bold text-white">
+                {totalUnread > 99 ? "99+" : totalUnread} yeni
+              </span>
+            )}
           </div>
+          <p className="sr-only" aria-live="polite" aria-atomic="true">
+            {totalUnread > 0
+              ? `${totalUnread} okunmamış mesajın var.`
+              : "Okunmamış mesajın yok."}
+          </p>
           <div className="min-h-0 flex-1 overflow-y-auto">
             {chats.length === 0 ? (
               <EmptyState
@@ -268,34 +321,49 @@ export function ChatDashboard() {
                   <button
                     key={chat.id}
                     type="button"
-                    aria-current={
-                      activeChatId === chat.id ? "true" : undefined
-                    }
+                    aria-current={activeChatId === chat.id ? "true" : undefined}
                     onClick={() => selectChat(chat.id)}
-                    className={`flex w-full items-start gap-3 border-b border-slate-100 p-4 text-left hover:bg-slate-50 focus-visible:outline-offset-[-2px] ${
-                      activeChatId === chat.id ? "bg-blue-50" : "bg-white"
+                    className={`relative flex w-full items-start gap-3 border-b border-slate-100 p-4 text-left hover:bg-slate-50 focus-visible:outline-offset-[-2px] ${
+                      activeChatId === chat.id
+                        ? "bg-blue-50 before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-blue-700"
+                        : "bg-white"
                     }`}
                   >
                     <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-blue-100 font-bold text-blue-800">
                       {chat.ideaTitle.charAt(0).toLocaleUpperCase("tr-TR")}
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="flex items-start justify-between gap-2">
-                        <span className="line-clamp-1 font-semibold text-slate-950">
+                      <span className="flex items-start justify-between gap-3">
+                        <span
+                          className={`line-clamp-1 text-sm text-slate-950 ${
+                            unread > 0 ? "font-extrabold" : "font-semibold"
+                          }`}
+                        >
                           {chat.ideaTitle}
                         </span>
+                        <time className="shrink-0 text-[11px] text-slate-500">
+                          {formatChatDate(chat.lastMessageAt)}
+                        </time>
+                      </span>
+                      <span className="mt-1 flex items-center gap-2">
+                        <span
+                          className={`line-clamp-1 min-w-0 flex-1 text-sm ${
+                            unread > 0
+                              ? "font-semibold text-slate-800"
+                              : "text-slate-600"
+                          }`}
+                        >
+                          {chat.lastMessage ?? "Sohbet başlatmaya hazır"}
+                        </span>
                         {unread > 0 && (
-                          <span className="flex min-h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-blue-700 px-1 text-[10px] font-bold text-white">
+                          <span
+                            className="flex min-h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-blue-700 px-1.5 text-[10px] font-bold text-white"
+                            aria-label={`${unread} okunmamış mesaj`}
+                          >
                             {unread > 99 ? "99+" : unread}
                           </span>
                         )}
                       </span>
-                      <span className="mt-1 line-clamp-1 block text-sm text-slate-600">
-                        {chat.lastMessage ?? "Sohbet başlatmaya hazır"}
-                      </span>
-                      <time className="mt-1 block text-xs text-slate-400">
-                        {formatChatDate(chat.lastMessageAt)}
-                      </time>
                     </span>
                   </button>
                 );
@@ -359,38 +427,53 @@ export function ChatDashboard() {
                     icon={MessageCircle}
                   />
                 ) : (
-                  <div className="space-y-3">
-                    {messages.map((message) => {
+                  <div className="space-y-3" aria-live="polite">
+                    {messages.map((message, index) => {
                       const isOwn = message.senderId === user.id;
+                      const previousMessage = messages[index - 1];
+                      const showDate =
+                        !previousMessage ||
+                        new Date(previousMessage.createdAt).toDateString() !==
+                          new Date(message.createdAt).toDateString();
                       return (
-                        <article
-                          key={message.id}
-                          className={`flex ${isOwn ? "justify-end" : "justify-start"}`}
-                        >
-                          <div
-                            className={`max-w-[88%] rounded-2xl px-4 py-3 sm:max-w-[72%] ${
-                              isOwn
-                                ? "rounded-br-md bg-blue-700 text-white"
-                                : "rounded-bl-md border border-slate-200 bg-white text-slate-800"
-                            }`}
+                        <div key={message.id}>
+                          {showDate && (
+                            <div className="my-4 flex items-center gap-3">
+                              <span className="h-px flex-1 bg-slate-200" />
+                              <time className="text-[11px] font-semibold text-slate-500">
+                                {formatMessageDate(message.createdAt)}
+                              </time>
+                              <span className="h-px flex-1 bg-slate-200" />
+                            </div>
+                          )}
+                          <article
+                            className={`flex ${isOwn ? "justify-end" : "justify-start"}`}
                           >
-                            {!isOwn && (
-                              <p className="mb-1 text-xs font-bold text-blue-700">
-                                {message.senderName}
-                              </p>
-                            )}
-                            <p className="whitespace-pre-wrap break-words text-sm leading-6">
-                              {message.content}
-                            </p>
-                            <time
-                              className={`mt-1 block text-right text-[10px] ${
-                                isOwn ? "text-blue-100" : "text-slate-400"
+                            <div
+                              className={`max-w-[88%] rounded-2xl px-4 py-3 shadow-sm sm:max-w-[72%] ${
+                                isOwn
+                                  ? "rounded-br-md bg-blue-700 text-white"
+                                  : "rounded-bl-md border border-slate-200 bg-white text-slate-800"
                               }`}
                             >
-                              {formatMessageTime(message.createdAt)}
-                            </time>
-                          </div>
-                        </article>
+                              {!isOwn && (
+                                <p className="mb-1 text-xs font-bold text-blue-700">
+                                  {message.senderName}
+                                </p>
+                              )}
+                              <p className="whitespace-pre-wrap break-words text-sm leading-6">
+                                {message.content}
+                              </p>
+                              <time
+                                className={`mt-1 block text-right text-[10px] ${
+                                  isOwn ? "text-blue-100" : "text-slate-400"
+                                }`}
+                              >
+                                {formatMessageTime(message.createdAt)}
+                              </time>
+                            </div>
+                          </article>
+                        </div>
                       );
                     })}
                     <div ref={messagesEndRef} />
@@ -414,6 +497,7 @@ export function ChatDashboard() {
                   )}
                   <div className="flex items-end gap-2">
                     <Textarea
+                      ref={composerRef}
                       value={content}
                       rows={2}
                       maxLength={2000}
