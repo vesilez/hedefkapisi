@@ -1,5 +1,6 @@
 import type { UserRole } from "@/constants/roles";
 import type { EntityId, Nullable } from "./common";
+import type { RegistrationSponsorProfile } from "./sponsor";
 
 export interface RegisterInput {
   email: string;
@@ -7,6 +8,7 @@ export interface RegisterInput {
   name: string;
   surname: string;
   role: UserRole;
+  sponsorProfile?: RegistrationSponsorProfile;
 }
 
 export interface LoginInput {

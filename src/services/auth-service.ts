@@ -18,6 +18,7 @@ import type {
 import { createUserDocument } from "@/services/user-service";
 import {
   createUserWithEmailAndPassword,
+  deleteUser,
   sendEmailVerification,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
@@ -76,16 +77,20 @@ export async function registerWithEmailAndPassword(
     );
   }
 
+  let createdUser: User | null = null;
+  let firestoreProfileCreated = false;
   try {
-    const { email, password, name, surname, role } = validation.data;
+    const { email, password, name, surname, role, sponsorProfile } =
+      validation.data;
     const credential = await createUserWithEmailAndPassword(
       auth,
       email,
       password,
     );
-
-    await updateProfile(credential.user, {
-      displayName: `${name} ${surname}`,
+    createdUser = credential.user;
+    console.log("AUTH CREATED", {
+      uid: credential.user.uid,
+      email: credential.user.email,
     });
 
     const userDocumentResult = await createUserDocument({
@@ -95,17 +100,50 @@ export async function registerWithEmailAndPassword(
       surname,
       email: credential.user.email ?? email,
       emailVerified: credential.user.emailVerified,
+      sponsorProfile,
     });
 
     if (!userDocumentResult.success) {
+      console.error("[registration] Firestore profile creation failed", {
+        uid: credential.user.uid,
+        role,
+        code: userDocumentResult.error.code,
+        message: userDocumentResult.error.message,
+      });
+      let rollbackSucceeded = false;
+      try {
+        await deleteUser(credential.user);
+        rollbackSucceeded = true;
+      } catch (rollbackError: unknown) {
+        console.error("[registration] Auth rollback failed", {
+          uid: credential.user.uid,
+          rollbackError,
+        });
+      }
       return {
         success: false,
         error: {
           code: "auth/user-document-creation-failed",
-          message:
-            "Hesabınız oluşturulmuş olabilir ancak kullanıcı kaydınız tamamlanamadı. Lütfen işlemi tekrar deneyin.",
+          message: rollbackSucceeded
+            ? "Kayıt profiliniz oluşturulamadı. Hesap geri alındı; lütfen tekrar deneyin."
+            : "Kayıt profiliniz oluşturulamadı ve hesap geri alınamadı. Lütfen destek ekibiyle iletişime geçin.",
         },
       };
+    }
+    firestoreProfileCreated = true;
+
+    try {
+      await updateProfile(credential.user, {
+        displayName: `${name} ${surname}`,
+      });
+    } catch (profileError: unknown) {
+      console.error(
+        "[registration] Auth displayName update failed after user document creation",
+        {
+          uid: credential.user.uid,
+          profileError,
+        },
+      );
     }
 
     await sendEmailVerification(credential.user);
@@ -115,6 +153,24 @@ export async function registerWithEmailAndPassword(
       data: mapFirebaseUser(credential.user),
     };
   } catch (error: unknown) {
+    console.error("[registration] Firebase registration failed", {
+      uid: createdUser?.uid ?? null,
+      error,
+    });
+    if (createdUser && !firestoreProfileCreated) {
+      console.error("[registration] Failure before Firestore profile creation", {
+        uid: createdUser.uid,
+        error,
+      });
+      try {
+        await deleteUser(createdUser);
+      } catch (rollbackError: unknown) {
+        console.error("[registration] Auth rollback failed", {
+          uid: createdUser.uid,
+          rollbackError,
+        });
+      }
+    }
     return firebaseFailure(error);
   }
 }

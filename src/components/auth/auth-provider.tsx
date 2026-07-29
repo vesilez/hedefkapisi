@@ -7,7 +7,9 @@ import {
 } from "@/services/auth-service";
 import type { AuthUser } from "@/types/auth";
 import type { AuthContextValue } from "@/types/auth-context";
+import { hasUserDocument } from "@/services/user-service";
 import { onAuthStateChanged, reload } from "firebase/auth";
+import { usePathname, useRouter } from "next/navigation";
 import {
   createContext,
   useCallback,
@@ -26,6 +28,8 @@ interface AuthProviderProps {
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
+  const pathname = usePathname();
+  const router = useRouter();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -60,6 +64,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
       unsubscribe?.();
     };
   }, []);
+
+  useEffect(() => {
+    if (
+      loading ||
+      !user ||
+      pathname === "/kayit" ||
+      pathname === "/profil-tamamlama"
+    ) {
+      return;
+    }
+    let active = true;
+    void hasUserDocument(user.id).then((exists) => {
+      if (active && !exists) router.replace("/profil-tamamlama");
+    });
+    return () => {
+      active = false;
+    };
+  }, [loading, pathname, router, user]);
 
   const logout = useCallback(async () => {
     const result = await logoutFromService();

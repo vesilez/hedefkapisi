@@ -20,7 +20,7 @@ import { useForm } from "react-hook-form";
 
 interface LoginSuccessState {
   emailVerified: boolean;
-  redirectPath: "/admin" | "/profil";
+  redirectPath: "/admin" | "/profil" | "/profil-tamamlama";
 }
 
 export function LoginForm() {
@@ -71,12 +71,13 @@ export function LoginForm() {
     }
 
     const profileResult = await getUserAccessProfile(result.data.id);
-    const redirectPath =
-      profileResult.success &&
-      profileResult.data &&
-      isAdminRole(profileResult.data.role)
-        ? "/admin"
-        : "/profil";
+    const redirectPath = !profileResult.success
+      ? "/profil"
+      : !profileResult.data
+        ? "/profil-tamamlama"
+        : isAdminRole(profileResult.data.role)
+          ? "/admin"
+          : "/profil";
 
     setLoginSuccess({
       emailVerified: result.data.emailVerified,

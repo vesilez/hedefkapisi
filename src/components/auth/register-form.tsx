@@ -13,12 +13,13 @@ import {
 import {
   registerFormSchema,
   type RegisterFormInput,
+  type RegisterFormValues,
 } from "@/lib/validations/register-form-schema";
 import { registerWithEmailAndPassword } from "@/services/auth-service";
 import { CheckCircle2, Eye, EyeOff, LoaderCircle, Mail } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 
 const ROLE_DESCRIPTIONS: Record<PublicRegisterRole, string> = {
   student: "Hayalini veya fikrini paylaş.",
@@ -36,8 +37,9 @@ export function RegisterForm() {
   const {
     register,
     handleSubmit,
+    control,
     formState: { errors, isSubmitting },
-  } = useForm<RegisterFormInput>({
+  } = useForm<RegisterFormInput, unknown, RegisterFormValues>({
     resolver: zodResolver(registerFormSchema),
     defaultValues: {
       name: "",
@@ -47,7 +49,9 @@ export function RegisterForm() {
       confirmPassword: "",
       role: "student",
     },
+    shouldUnregister: true,
   });
+  const selectedRole = useWatch({ control, name: "role" });
 
   const onSubmit = handleSubmit(async (values) => {
     if (registrationCompleted) return;
@@ -59,6 +63,7 @@ export function RegisterForm() {
       name: values.name,
       surname: values.surname,
       role: values.role,
+      sponsorProfile: values.sponsorProfile,
     };
     const result = await registerWithEmailAndPassword(input);
 
@@ -341,6 +346,89 @@ export function RegisterForm() {
             </p>
           )}
         </fieldset>
+
+        {selectedRole === "sponsor" && (
+          <fieldset className="mt-6 rounded-2xl border border-blue-200 bg-blue-50/50 p-4 sm:p-5">
+            <legend className="px-2 text-sm font-bold text-blue-900">
+              Sponsor / kurum bilgileri
+            </legend>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="grid gap-2 text-sm font-semibold text-slate-800">
+                Kurum adı
+                <Input
+                  {...register("sponsorProfile.organizationName")}
+                  maxLength={120}
+                />
+              </label>
+              <label className="grid gap-2 text-sm font-semibold text-slate-800">
+                Kurum türü
+                <select
+                  {...register("sponsorProfile.organizationType")}
+                  className="min-h-11 rounded-xl border border-slate-300 bg-white px-3 text-sm"
+                  defaultValue="company"
+                >
+                  <option value="company">Şirket</option>
+                  <option value="ngo">Dernek / STK</option>
+                  <option value="foundation">Vakıf</option>
+                  <option value="public_institution">Kamu kurumu</option>
+                  <option value="university">Üniversite</option>
+                  <option value="other">Diğer</option>
+                </select>
+              </label>
+              <label className="grid gap-2 text-sm font-semibold text-slate-800">
+                Şehir
+                <Input
+                  {...register("sponsorProfile.city")}
+                  maxLength={80}
+                />
+              </label>
+              <label className="grid gap-2 text-sm font-semibold text-slate-800">
+                Web sitesi
+                <Input
+                  type="url"
+                  {...register("sponsorProfile.website")}
+                  placeholder="https://"
+                />
+              </label>
+            </div>
+            <label className="mt-4 grid gap-2 text-sm font-semibold text-slate-800">
+              Açıklama
+              <textarea
+                {...register("sponsorProfile.description")}
+                minLength={20}
+                maxLength={1500}
+                rows={5}
+                className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="mt-4 grid gap-2 text-sm font-semibold text-slate-800">
+              Destek alanları
+              <Input
+                {...register("sponsorProfile.supportAreas", {
+                  setValueAs: (value: unknown) =>
+                    typeof value === "string"
+                      ? value
+                          .split(",")
+                          .map((item) => item.trim())
+                          .filter(Boolean)
+                      : [],
+                })}
+                placeholder="Eğitim, teknoloji, finans..."
+              />
+            </label>
+            {errors.sponsorProfile && (
+              <p className="mt-3 text-sm text-red-700" role="alert">
+                {errors.sponsorProfile.message ??
+                  errors.sponsorProfile.organizationName?.message ??
+                  errors.sponsorProfile.organizationType?.message ??
+                  errors.sponsorProfile.city?.message ??
+                  errors.sponsorProfile.website?.message ??
+                  errors.sponsorProfile.description?.message ??
+                  errors.sponsorProfile.supportAreas?.message}
+              </p>
+            )}
+          </fieldset>
+        )}
 
         <Button
           type="submit"

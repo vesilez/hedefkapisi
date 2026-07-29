@@ -143,7 +143,10 @@ export async function saveSponsorApplication(input: SponsorProfileInput): Promis
     await setDoc(reference, {
       sponsorId: userId,
       ...values,
+      organizationName: values.institutionName,
+      organizationType: "other",
       status: "pending",
+      approvalStatus: "pending",
       reviewedBy: null,
       reviewedAt: null,
       createdAt: serverTimestamp(),
@@ -265,7 +268,7 @@ export async function reviewSponsorApplication(sponsorId: string, status: Exclud
       const profileRef = doc(db, "sponsorProfiles", sponsorId);
       const userRef = doc(db, "users", sponsorId);
       const userSnap = await transaction.get(userRef);
-      transaction.update(profileRef, { status, reviewedBy: adminId, reviewedAt: serverTimestamp(), updatedAt: serverTimestamp() });
+      transaction.update(profileRef, { status, approvalStatus: status, reviewedBy: adminId, reviewedAt: serverTimestamp(), updatedAt: serverTimestamp() });
       if (status === "approved" && userSnap.exists()) {
         const granted = grantAchievementInTransaction(transaction, sponsorId, userSnap.data(), "sponsor_badge");
         if (granted) transaction.set(doc(db, "leaderboard", sponsorId), { achievementCount: increment(1), updatedAt: serverTimestamp() }, { merge: true });

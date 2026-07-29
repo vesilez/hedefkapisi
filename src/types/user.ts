@@ -2,6 +2,7 @@ import type { UserRole } from "@/constants/roles";
 import type { SupportType } from "@/constants/support-types";
 import type { UserStatus } from "@/constants/user-statuses";
 import type { EntityId, ISODateString, Nullable } from "./common";
+import type { RegistrationSponsorProfile } from "./sponsor";
 
 export const SCHOOL_TYPES = [
   "high_school",
@@ -62,6 +63,7 @@ export interface CreateUserDocumentInput {
   surname: string;
   email: string;
   emailVerified: boolean;
+  sponsorProfile?: RegistrationSponsorProfile;
 }
 
 export interface UpdateUserProfileInput {

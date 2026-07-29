@@ -34,7 +34,6 @@ import {
   type DocumentSnapshot,
   collection,
   doc,
-  writeBatch,
   getCountFromServer,
   getDoc,
   getDocFromServer,
@@ -457,9 +456,28 @@ export async function createUserDocument(
   }
 
   try {
-    const batch = writeBatch(db);
-    batch.set(doc(db, "users", input.uid), {
+    const existing = await getDocFromServer(doc(db, "users", input.uid));
+    if (existing.exists()) {
+      console.warn("[registration] User document already exists", {
+        uid: input.uid,
+      });
+      return {
+        success: false,
+        error: {
+          code: "user/already-exists",
+          message: "Kullanıcı profiliniz zaten mevcut.",
+        },
+      };
+    }
+    console.log("WRITING USER DOC", {
+      path: `users/${input.uid}`,
+      uid: input.uid,
+      role: input.role,
+      profileCompleted: false,
+    });
+    await setDoc(doc(db, "users", input.uid), {
       id: input.uid,
+      uid: input.uid,
       role: input.role,
       name: input.name,
       surname: input.surname,
@@ -472,24 +490,98 @@ export async function createUserDocument(
       avatarUrl: null,
       score: 0,
       lastScoreEventId: null,
+      ...(input.role === "sponsor" && input.sponsorProfile
+        ? {
+            sponsorProfile: {
+              ...input.sponsorProfile,
+              approvalStatus: "pending",
+            },
+          }
+        : {}),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
-    batch.set(doc(db, "leaderboard", input.uid), {
-      userId: input.uid,
-      name: input.name,
-      surname: input.surname,
-      avatarUrl: null,
-      role: input.role,
-      score: 0,
-      achievementCount: 0,
-      updatedAt: serverTimestamp(),
+    console.log("USER DOC CREATED", {
+      path: `users/${input.uid}`,
+      uid: input.uid,
     });
-    await batch.commit();
+    if (input.role === "sponsor" && input.sponsorProfile) {
+      try {
+        await setDoc(doc(db, "sponsorProfiles", input.uid), {
+        sponsorId: input.uid,
+        institutionName: input.sponsorProfile.organizationName,
+        organizationName: input.sponsorProfile.organizationName,
+        organizationType: input.sponsorProfile.organizationType,
+        logoUrl: null,
+        description: input.sponsorProfile.description,
+        website: input.sponsorProfile.website,
+        city: input.sponsorProfile.city,
+        supportAreas: input.sponsorProfile.supportAreas,
+        status: "pending",
+        approvalStatus: "pending",
+        reviewedBy: null,
+        reviewedAt: null,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        });
+      } catch (sponsorProfileError: unknown) {
+        console.error(
+          "[registration] Base user created but sponsor projection failed",
+          {
+            uid: input.uid,
+            code:
+              getFirebaseErrorCode(sponsorProfileError) ?? "firestore/unknown",
+            error: sponsorProfileError,
+          },
+        );
+      }
+    }
+    try {
+      await setDoc(doc(db, "leaderboard", input.uid), {
+        userId: input.uid,
+        name: input.name,
+        surname: input.surname,
+        avatarUrl: null,
+        role: input.role,
+        score: 0,
+        achievementCount: 0,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (leaderboardError: unknown) {
+      console.error(
+        "[registration] User created but leaderboard projection failed",
+        {
+          uid: input.uid,
+          code: getFirebaseErrorCode(leaderboardError) ?? "firestore/unknown",
+          error: leaderboardError,
+        },
+      );
+    }
 
     return { success: true, data: undefined };
   } catch (error: unknown) {
+    console.error("[registration:create-user-document] Firestore write failed", {
+      uid: input.uid,
+      role: input.role,
+      code: getFirebaseErrorCode(error) ?? "firestore/unknown",
+      error,
+    });
     return failure(error);
+  }
+}
+
+export async function hasUserDocument(userId: string): Promise<boolean> {
+  if (!userId || auth.currentUser?.uid !== userId) return false;
+  try {
+    const snapshot = await getDocFromServer(doc(db, "users", userId));
+    return snapshot.exists();
+  } catch (error: unknown) {
+    console.error("[registration:profile-check] Firestore read failed", {
+      uid: userId,
+      code: getFirebaseErrorCode(error) ?? "firestore/unknown",
+      error,
+    });
+    return true;
   }
 }
 

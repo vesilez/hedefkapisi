@@ -3,6 +3,25 @@ import type { IdeaListItem } from "./idea";
 export const SPONSOR_STATUSES = ["pending", "approved", "rejected"] as const;
 export type SponsorStatus = (typeof SPONSOR_STATUSES)[number];
 
+export const ORGANIZATION_TYPES = [
+  "company",
+  "ngo",
+  "foundation",
+  "public_institution",
+  "university",
+  "other",
+] as const;
+export type OrganizationType = (typeof ORGANIZATION_TYPES)[number];
+
+export interface RegistrationSponsorProfile {
+  organizationName: string;
+  organizationType: OrganizationType;
+  city: string;
+  website: string | null;
+  description: string;
+  supportAreas: string[];
+}
+
 export interface SponsorProfile {
   sponsorId: string;
   institutionName: string;

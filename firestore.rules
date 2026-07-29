@@ -81,6 +81,34 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
+      function validRegistrationSponsorProfile() {
+        let profile = request.resource.data.get("sponsorProfile", null);
+        return (
+          request.resource.data.role == "sponsor"
+          && profile is map
+          && profile.keys().hasOnly([
+            "organizationName", "organizationType", "city", "website",
+            "description", "supportAreas", "approvalStatus"
+          ])
+          && safeUserText(profile.organizationName, 2, 120)
+          && profile.organizationType in [
+            "company", "ngo", "foundation", "public_institution",
+            "university", "other"
+          ]
+          && safeUserText(profile.city, 2, 80)
+          && profile.description is string
+          && profile.description.size() >= 20
+          && profile.description.size() <= 1500
+          && profile.supportAreas is list
+          && profile.supportAreas.size() >= 1
+          && profile.supportAreas.size() <= 12
+          && profile.approvalStatus == "pending"
+        ) || (
+          request.resource.data.role != "sponsor"
+          && !("sponsorProfile" in request.resource.data)
+        );
+      }
+
       function validScoreUpdate() {
         let eventId = request.resource.data.lastScoreEventId;
         let eventPath = /databases/$(database)/documents/scoreEvents/$(eventId);
@@ -125,6 +153,7 @@ service cloud.firestore {
       allow create: if signedIn()
         && request.auth.uid == userId
         && request.resource.data.id == userId
+        && request.resource.data.uid == userId
         && request.resource.data.role in ["student", "supporter", "mentor", "sponsor"]
         && request.resource.data.status == "active"
         && request.resource.data.email == request.auth.token.email
@@ -133,10 +162,12 @@ service cloud.firestore {
         && request.resource.data.updatedAt == request.time
         && request.resource.data.score == 0
         && request.resource.data.lastScoreEventId == null
+        && request.resource.data.profileCompleted == false
+        && validRegistrationSponsorProfile()
         && request.resource.data.keys().hasOnly([
-          "id", "role", "name", "surname", "email", "phone", "city",
+          "id", "uid", "role", "name", "surname", "email", "phone", "city",
           "status", "profileCompleted", "emailVerified", "avatarUrl",
-          "score", "lastScoreEventId", "createdAt", "updatedAt"
+          "score", "lastScoreEventId", "sponsorProfile", "createdAt", "updatedAt"
         ]);
 
       allow read: if signedIn() && (request.auth.uid == userId || isAdmin());
@@ -822,14 +853,16 @@ service cloud.firestore {
         || isAdmin();
       allow create: if signedIn()
         && request.auth.uid == sponsorId
-        && roleIs("sponsor")
+        && getAfter(/databases/$(database)/documents/users/$(sponsorId)).data.role == "sponsor"
         && request.resource.data.keys().hasOnly([
-          "sponsorId", "institutionName", "logoUrl", "description", "website",
-          "city", "supportAreas", "status", "reviewedBy", "reviewedAt",
-          "createdAt", "updatedAt"
+          "sponsorId", "institutionName", "organizationName",
+          "organizationType", "logoUrl", "description", "website", "city",
+          "supportAreas", "status", "approvalStatus", "reviewedBy",
+          "reviewedAt", "createdAt", "updatedAt"
         ])
         && request.resource.data.sponsorId == sponsorId
         && request.resource.data.status == "pending"
+        && request.resource.data.approvalStatus == "pending"
         && request.resource.data.reviewedBy == null
         && request.resource.data.reviewedAt == null
         && request.resource.data.createdAt == request.time
@@ -840,9 +873,11 @@ service cloud.firestore {
           request.auth.uid == sponsorId
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             "institutionName", "logoUrl", "description", "website", "city",
-            "supportAreas", "status", "reviewedBy", "reviewedAt", "updatedAt"
+            "organizationName", "organizationType", "supportAreas", "status",
+            "approvalStatus", "reviewedBy", "reviewedAt", "updatedAt"
           ])
           && request.resource.data.status == "pending"
+          && request.resource.data.approvalStatus == "pending"
           && request.resource.data.reviewedBy == null
           && request.resource.data.reviewedAt == null
           && request.resource.data.updatedAt == request.time
@@ -851,8 +886,11 @@ service cloud.firestore {
         || (
           isAdmin()
           && request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(["status", "reviewedBy", "reviewedAt", "updatedAt"])
+            .hasOnly([
+              "status", "approvalStatus", "reviewedBy", "reviewedAt", "updatedAt"
+            ])
           && request.resource.data.status in ["approved", "rejected"]
+          && request.resource.data.approvalStatus == request.resource.data.status
           && request.resource.data.reviewedBy == request.auth.uid
           && request.resource.data.reviewedAt == request.time
           && request.resource.data.updatedAt == request.time
