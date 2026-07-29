@@ -34,7 +34,12 @@ export type LeaderboardResult =
   | { success: false; error: { code: string; message: string } };
 
 export type ScoreEventType =
-  "dream" | "support" | "comment" | "like" | "completed_support";
+  | "dream"
+  | "support"
+  | "comment"
+  | "like"
+  | "completed_support"
+  | "sponsor_support";
 
 const leaderboardEntrySchema = z.object({
   userId: z.string().min(1),

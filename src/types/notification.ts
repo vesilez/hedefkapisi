@@ -11,6 +11,9 @@ export const NOTIFICATION_TYPES = [
   "idea_comment",
   "idea_liked",
   "chat_message",
+  "admin_activity",
+  "sponsor_approved",
+  "sponsor_support_received",
 ] as const;
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];

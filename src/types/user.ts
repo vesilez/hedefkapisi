@@ -57,7 +57,7 @@ export interface BaseUser {
 
 export interface CreateUserDocumentInput {
   uid: EntityId;
-  role: "student" | "supporter" | "mentor";
+  role: "student" | "supporter" | "mentor" | "sponsor";
   name: string;
   surname: string;
   email: string;

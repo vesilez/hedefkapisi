@@ -1,9 +1,9 @@
 import { z } from "zod";
+import { safeText } from "./safe-text";
 
 export const mentorshipRequestSchema = z.object({
   mentorId: z.string().min(1),
-  message: z
-    .string()
+  message: safeText()
     .trim()
     .min(20, "Talep mesajı en az 20 karakter olmalıdır.")
     .max(1500, "Talep mesajı en fazla 1500 karakter olabilir."),
@@ -17,21 +17,18 @@ export const mentorshipRequestSchema = z.object({
     ),
 });
 
-export const mentorNoteSchema = z
-  .string()
+export const mentorNoteSchema = safeText()
   .trim()
   .min(3, "Not en az 3 karakter olmalıdır.")
   .max(3000, "Not en fazla 3000 karakter olabilir.");
 
 export const mentorEvaluationSchema = z.object({
   progress: z.number().int().min(1).max(5),
-  summary: z
-    .string()
+  summary: safeText()
     .trim()
     .min(10, "Değerlendirme en az 10 karakter olmalıdır.")
     .max(2000, "Değerlendirme en fazla 2000 karakter olabilir."),
-  nextSteps: z
-    .string()
+  nextSteps: safeText()
     .trim()
     .min(5, "Sonraki adımlar en az 5 karakter olmalıdır.")
     .max(1500, "Sonraki adımlar en fazla 1500 karakter olabilir."),

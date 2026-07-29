@@ -125,6 +125,15 @@ export function SiteHeader() {
                       Mentor Paneli
                     </Link>
                   )}
+                {profileAccess?.userId === user.id &&
+                  profileAccess.role === "sponsor" && (
+                    <Link
+                      href="/sponsor-paneli"
+                      className="rounded-xl px-4 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-50"
+                    >
+                      Sponsor Paneli
+                    </Link>
+                  )}
                 <Link
                   href="/mesajlar"
                   className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-50"
@@ -244,6 +253,16 @@ export function SiteHeader() {
                         className="flex min-h-11 items-center rounded-lg px-3 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-50"
                       >
                         Mentor Paneli
+                      </Link>
+                    )}
+                  {profileAccess?.userId === user.id &&
+                    profileAccess.role === "sponsor" && (
+                      <Link
+                        href="/sponsor-paneli"
+                        onClick={closeMobileMenu}
+                        className="flex min-h-11 items-center rounded-lg px-3 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-50"
+                      >
+                        Sponsor Paneli
                       </Link>
                     )}
                   <Link

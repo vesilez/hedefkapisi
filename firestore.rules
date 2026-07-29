@@ -26,6 +26,13 @@ service cloud.firestore {
       return value is timestamp && value <= request.time;
     }
 
+    function safeUserText(value, minimum, maximum) {
+      return value is string
+        && value.size() >= minimum
+        && value.size() <= maximum
+        && !value.matches(".*<.*");
+    }
+
     function validAchievement(value) {
       return value is map
         && value.keys().hasOnly(["unlocked", "unlockedAt"])
@@ -40,12 +47,14 @@ service cloud.firestore {
           "first_dream",
           "first_like",
           "first_support",
-          "first_chat"
+          "first_chat",
+          "sponsor_badge"
         ])
         && (!("first_dream" in achievements) || validAchievement(achievements.first_dream))
         && (!("first_like" in achievements) || validAchievement(achievements.first_like))
         && (!("first_support" in achievements) || validAchievement(achievements.first_support))
-        && (!("first_chat" in achievements) || validAchievement(achievements.first_chat));
+        && (!("first_chat" in achievements) || validAchievement(achievements.first_chat))
+        && (!("sponsor_badge" in achievements) || validAchievement(achievements.sponsor_badge));
     }
 
     function achievementCount(data) {
@@ -53,7 +62,8 @@ service cloud.firestore {
       return (("first_dream" in achievements) ? 1 : 0)
         + (("first_like" in achievements) ? 1 : 0)
         + (("first_support" in achievements) ? 1 : 0)
-        + (("first_chat" in achievements) ? 1 : 0);
+        + (("first_chat" in achievements) ? 1 : 0)
+        + (("sponsor_badge" in achievements) ? 1 : 0);
     }
 
     function validAchievementGrowth() {
@@ -115,7 +125,7 @@ service cloud.firestore {
       allow create: if signedIn()
         && request.auth.uid == userId
         && request.resource.data.id == userId
-        && request.resource.data.role in ["student", "supporter", "mentor"]
+        && request.resource.data.role in ["student", "supporter", "mentor", "sponsor"]
         && request.resource.data.status == "active"
         && request.resource.data.email == request.auth.token.email
         && request.resource.data.emailVerified == request.auth.token.email_verified
@@ -210,6 +220,11 @@ service cloud.firestore {
               && request.resource.data.points == 30
               && getAfter(/databases/$(database)/documents/supportRequests/$(sourceId)).data.supporterId == userId
               && getAfter(/databases/$(database)/documents/supportRequests/$(sourceId)).data.status == "approved"
+            )
+            || (
+              type == "sponsor_support"
+              && request.resource.data.points == 25
+              && getAfter(/databases/$(database)/documents/sponsorSupports/$(sourceId)).data.sponsorId == userId
             )
           );
       }
@@ -315,6 +330,7 @@ service cloud.firestore {
         && request.resource.data.message is string
         && request.resource.data.message.size() >= 20
         && request.resource.data.message.size() <= 1500
+        && safeUserText(request.resource.data.message, 20, 1500)
         && request.resource.data.focusAreas is list
         && request.resource.data.focusAreas.size() >= 1
         && request.resource.data.focusAreas.size() <= 5
@@ -394,6 +410,7 @@ service cloud.firestore {
         && request.resource.data.content is string
         && request.resource.data.content.size() >= 3
         && request.resource.data.content.size() <= 3000
+        && safeUserText(request.resource.data.content, 3, 3000)
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time;
       allow update: if signedIn()
@@ -430,6 +447,7 @@ service cloud.firestore {
         && request.resource.data.summary is string
         && request.resource.data.summary.size() >= 10
         && request.resource.data.summary.size() <= 2000
+        && safeUserText(request.resource.data.summary, 10, 2000)
         && request.resource.data.nextSteps is string
         && request.resource.data.nextSteps.size() >= 5
         && request.resource.data.nextSteps.size() <= 1500
@@ -510,6 +528,19 @@ service cloud.firestore {
           && request.resource.data.likeCount >= 0;
       }
 
+      function sponsorSupportCountUpdate() {
+        let supportId = request.resource.data.lastSponsorSupportId;
+        let supportPath = /databases/$(database)/documents/sponsorSupports/$(supportId);
+        return signedIn()
+          && roleIs("sponsor")
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(["supportCount", "lastSponsorSupportId"])
+          && request.resource.data.supportCount == resource.data.supportCount + 1
+          && existsAfter(supportPath)
+          && getAfter(supportPath).data.ideaId == ideaId
+          && getAfter(supportPath).data.sponsorId == request.auth.uid;
+      }
+
       function adminEdit() {
         return isAdmin()
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
@@ -521,7 +552,7 @@ service cloud.firestore {
 
       allow read: if resource.data.status == "approved" || isOwner() || isAdmin();
       allow create: if validOwnerCreate();
-      allow update: if ownerEdit() || likeCountUpdate() || adminEdit();
+      allow update: if ownerEdit() || likeCountUpdate() || sponsorSupportCountUpdate() || adminEdit();
       allow delete: if isAdmin();
     }
 
@@ -542,6 +573,7 @@ service cloud.firestore {
         && request.resource.data.message is string
         && request.resource.data.message.size() >= 20
         && request.resource.data.message.size() <= 1500
+        && safeUserText(request.resource.data.message, 20, 1500)
         && request.resource.data.supportTypes is list
         && request.resource.data.supportTypes.size() >= 1
         && request.resource.data.supportTypes.size() <= 4
@@ -583,6 +615,7 @@ service cloud.firestore {
         && request.resource.data.content is string
         && request.resource.data.content.size() >= 2
         && request.resource.data.content.size() <= 1000
+        && safeUserText(request.resource.data.content, 2, 1000)
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time
         && (
@@ -606,6 +639,7 @@ service cloud.firestore {
           && request.resource.data.content is string
           && request.resource.data.content.size() >= 2
           && request.resource.data.content.size() <= 1000
+          && safeUserText(request.resource.data.content, 2, 1000)
           && request.resource.data.updatedAt == request.time
         )
         || (
@@ -680,6 +714,15 @@ service cloud.firestore {
           || (type == "new_support_request"
             && get(/databases/$(database)/documents/supportRequests/$(sourceId)).data.supporterId == actorId
             && get(/databases/$(database)/documents/users/$(recipientId)).data.role in ["admin", "superadmin"])
+          || (type == "admin_activity"
+            && get(/databases/$(database)/documents/sponsorProfiles/$(sourceId)).data.sponsorId == actorId
+            && get(/databases/$(database)/documents/users/$(recipientId)).data.role in ["admin", "superadmin"])
+          || (type == "sponsor_support_received"
+            && get(/databases/$(database)/documents/sponsorSupports/$(sourceId)).data.sponsorId == actorId
+            && get(/databases/$(database)/documents/sponsorSupports/$(sourceId)).data.ideaOwnerId == recipientId)
+          || (type == "sponsor_approved"
+            && isAdmin()
+            && get(/databases/$(database)/documents/sponsorProfiles/$(sourceId)).data.sponsorId == recipientId)
         );
       }
 
@@ -702,6 +745,120 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["isRead"])
         && request.resource.data.isRead == true;
       allow delete: if false;
+    }
+
+    match /feedback/{feedbackId} {
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          "id", "type", "title", "description", "pagePath", "userId",
+          "userName", "userEmail", "status", "createdAt", "updatedAt"
+        ])
+        && request.resource.data.id == feedbackId
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.userEmail == request.auth.token.email
+        && request.resource.data.userName
+          == currentUser().data.name + " " + currentUser().data.surname
+        && request.resource.data.type in ["bug", "suggestion", "satisfaction"]
+        && request.resource.data.status == "open"
+        && safeUserText(request.resource.data.title, 5, 120)
+        && safeUserText(request.resource.data.description, 15, 3000)
+        && request.resource.data.pagePath is string
+        && request.resource.data.pagePath.size() >= 1
+        && request.resource.data.pagePath.size() <= 500
+        && request.resource.data.pagePath.matches("^/([^/].*)?$")
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow read: if signedIn()
+        && (resource.data.userId == request.auth.uid || isAdmin());
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(["status", "updatedAt"])
+        && request.resource.data.status in ["open", "reviewing", "resolved"]
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
+    }
+
+    match /sponsorProfiles/{sponsorId} {
+      function validProfileFields() {
+        return request.resource.data.institutionName is string
+          && request.resource.data.institutionName.size() >= 2
+          && request.resource.data.institutionName.size() <= 120
+          && request.resource.data.description is string
+          && request.resource.data.description.size() >= 20
+          && request.resource.data.description.size() <= 1500
+          && request.resource.data.city is string
+          && request.resource.data.supportAreas is list
+          && request.resource.data.supportAreas.size() >= 1
+          && request.resource.data.supportAreas.size() <= 12;
+      }
+      allow read: if resource.data.status == "approved"
+        || (signedIn() && request.auth.uid == sponsorId)
+        || isAdmin();
+      allow create: if signedIn()
+        && request.auth.uid == sponsorId
+        && roleIs("sponsor")
+        && request.resource.data.keys().hasOnly([
+          "sponsorId", "institutionName", "logoUrl", "description", "website",
+          "city", "supportAreas", "status", "reviewedBy", "reviewedAt",
+          "createdAt", "updatedAt"
+        ])
+        && request.resource.data.sponsorId == sponsorId
+        && request.resource.data.status == "pending"
+        && request.resource.data.reviewedBy == null
+        && request.resource.data.reviewedAt == null
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && validProfileFields();
+      allow update: if signedIn() && (
+        (
+          request.auth.uid == sponsorId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            "institutionName", "logoUrl", "description", "website", "city",
+            "supportAreas", "status", "reviewedBy", "reviewedAt", "updatedAt"
+          ])
+          && request.resource.data.status == "pending"
+          && request.resource.data.reviewedBy == null
+          && request.resource.data.reviewedAt == null
+          && request.resource.data.updatedAt == request.time
+          && validProfileFields()
+        )
+        || (
+          isAdmin()
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(["status", "reviewedBy", "reviewedAt", "updatedAt"])
+          && request.resource.data.status in ["approved", "rejected"]
+          && request.resource.data.reviewedBy == request.auth.uid
+          && request.resource.data.reviewedAt == request.time
+          && request.resource.data.updatedAt == request.time
+        )
+      );
+      allow delete: if isAdmin();
+    }
+
+    match /sponsorSupports/{supportId} {
+      allow read: if signedIn() && (
+        resource.data.sponsorId == request.auth.uid
+        || resource.data.ideaOwnerId == request.auth.uid
+        || isAdmin()
+      );
+      allow create: if signedIn()
+        && roleIs("sponsor")
+        && request.resource.data.keys().hasOnly([
+          "id", "sponsorId", "sponsorName", "ideaId", "ideaOwnerId",
+          "ideaTitle", "ideaSlug", "message", "createdAt"
+        ])
+        && request.resource.data.id == supportId
+        && request.resource.data.sponsorId == request.auth.uid
+        && supportId == request.auth.uid + "__" + request.resource.data.ideaId
+        && get(/databases/$(database)/documents/sponsorProfiles/$(request.auth.uid)).data.status == "approved"
+        && get(/databases/$(database)/documents/ideas/$(request.resource.data.ideaId)).data.status == "approved"
+        && get(/databases/$(database)/documents/ideas/$(request.resource.data.ideaId)).data.studentId == request.resource.data.ideaOwnerId
+        && request.resource.data.message is string
+        && request.resource.data.message.size() >= 10
+        && request.resource.data.message.size() <= 1000
+        && safeUserText(request.resource.data.message, 10, 1000)
+        && request.resource.data.createdAt == request.time;
+      allow update, delete: if false;
     }
 
     match /chats/{chatId} {
@@ -760,7 +917,8 @@ service cloud.firestore {
           && request.resource.data.readBy == [request.auth.uid]
           && request.resource.data.content is string
           && request.resource.data.content.size() > 0
-          && request.resource.data.content.size() <= 2000;
+          && request.resource.data.content.size() <= 2000
+          && safeUserText(request.resource.data.content, 1, 2000);
         allow update: if signedIn()
           && request.auth.uid in chat().data.participantIds
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["readBy"])

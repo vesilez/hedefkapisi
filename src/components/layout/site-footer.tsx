@@ -89,6 +89,7 @@ export function SiteFooter() {
             Yasal
           </p>
           {[
+            { href: "/geri-bildirim", label: "Geri Bildirim" },
             { href: "/kvkk", label: "KVKK" },
             { href: "/gizlilik-politikasi", label: "Gizlilik Politikası" },
             { href: "/kullanim-sartlari", label: "Kullanım Şartları" },

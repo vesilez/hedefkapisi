@@ -4,6 +4,7 @@ import {
 } from "@/constants/support-types";
 import { z } from "zod";
 import { entityIdSchema } from "./common-schema";
+import { safeText } from "./safe-text";
 
 const uniqueValues = (values: readonly string[]) =>
   new Set(values).size === values.length;
@@ -22,8 +23,7 @@ export const createSupportRequestSchema = z.object({
         ),
       "Finansal destek MVP sürümünde kullanılamaz.",
     ),
-  message: z
-    .string()
+  message: safeText()
     .trim()
     .min(20, "Mesaj en az 20 karakter olmalıdır.")
     .max(1500, "Mesaj en fazla 1500 karakter olabilir."),

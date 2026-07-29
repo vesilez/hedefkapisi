@@ -2,6 +2,7 @@ export const USER_ROLES = [
   "student",
   "supporter",
   "mentor",
+  "sponsor",
   "admin",
   "superadmin",
 ] as const;
@@ -13,6 +14,7 @@ export const USER_ROLE_LABELS = {
   student: "Öğrenci",
   supporter: "Destekçi",
   mentor: "Mentor",
+  sponsor: "Sponsor / Kurum",
   admin: "Yönetici",
   superadmin: "Süper Yönetici",
 } as const satisfies Record<UserRole, string>;

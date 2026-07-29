@@ -7,38 +7,33 @@ import {
 import { IDEA_VISIBILITIES } from "@/types/idea";
 import { z } from "zod";
 import { citySchema, urlSchema } from "./common-schema";
+import { safeText } from "./safe-text";
 
 const uniqueValues = (values: readonly string[]) =>
   new Set(values).size === values.length;
 
 export const ideaFormSchema = z.object({
-  title: z
-    .string()
+  title: safeText()
     .trim()
     .min(5, "Başlık en az 5 karakter olmalıdır.")
     .max(100, "Başlık en fazla 100 karakter olabilir."),
-  shortDescription: z
-    .string()
+  shortDescription: safeText()
     .trim()
     .min(20, "Kısa açıklama en az 20 karakter olmalıdır.")
     .max(240, "Kısa açıklama en fazla 240 karakter olabilir."),
-  description: z
-    .string()
+  description: safeText()
     .trim()
     .min(50, "Açıklama en az 50 karakter olmalıdır.")
     .max(5000, "Açıklama en fazla 5000 karakter olabilir."),
-  problem: z
-    .string()
+  problem: safeText()
     .trim()
     .min(20, "Problem açıklaması en az 20 karakter olmalıdır.")
     .max(2000, "Problem açıklaması en fazla 2000 karakter olabilir."),
-  solution: z
-    .string()
+  solution: safeText()
     .trim()
     .min(20, "Çözüm açıklaması en az 20 karakter olmalıdır.")
     .max(2000, "Çözüm açıklaması en fazla 2000 karakter olabilir."),
-  targetAudience: z
-    .string()
+  targetAudience: safeText()
     .trim()
     .min(5, "Hedef kitle en az 5 karakter olmalıdır.")
     .max(500, "Hedef kitle en fazla 500 karakter olabilir."),

@@ -16,6 +16,7 @@ import { getUserAccessProfile } from "@/services/user-service";
 import type { ProfileDashboardData } from "@/types/profile-dashboard";
 import {
   Bookmark,
+  Building2,
   CheckCircle2,
   Heart,
   Handshake,
@@ -158,7 +159,7 @@ export function ProfileDashboard() {
       />
       {data.profile.role === "student" && <StudentMentorshipSummary />}
 
-      {editingProfile && (
+      {editingProfile && data.profile.role !== "sponsor" && (
         <section id="profil-duzenle" className="mt-6">
           <h2 className="mb-4 text-2xl font-bold text-slate-950">
             Profil bilgilerini düzenle
@@ -243,10 +244,20 @@ function ProfileSummary({
             </SummaryField>
           </dl>
         </div>
+        {profile.role === "sponsor" ? (
+          <Link
+            href="/sponsor-paneli"
+            className="inline-flex min-h-11 items-center justify-center rounded-xl border border-blue-200 bg-white px-5 py-2.5 text-sm font-semibold text-blue-800 hover:bg-blue-50"
+          >
+            <Building2 aria-hidden="true" className="mr-2 size-4" />
+            Sponsor Profilini Yönet
+          </Link>
+        ) : (
         <Button variant="secondary" onClick={onToggleEditing}>
           <Pencil aria-hidden="true" className="mr-2 size-4" />
           {editing ? "Düzenlemeyi Kapat" : "Profil Bilgilerini Düzenle"}
         </Button>
+        )}
       </div>
     </Card>
   );
@@ -336,6 +347,11 @@ const ACHIEVEMENT_STYLES: Record<
     icon: MessageCircle,
     accent: "from-blue-500 to-cyan-500",
     iconBackground: "bg-blue-100 text-blue-700",
+  },
+  sponsor_badge: {
+    icon: Building2,
+    accent: "from-emerald-500 to-teal-500",
+    iconBackground: "bg-emerald-100 text-emerald-700",
   },
 };
 

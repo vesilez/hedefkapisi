@@ -1,11 +1,13 @@
 import type { UserRole } from "@/constants/roles";
 import { z } from "zod";
 import { emailSchema } from "./common-schema";
+import { safeText } from "./safe-text";
 
 export const PUBLIC_REGISTER_ROLES = [
   "student",
   "supporter",
   "mentor",
+  "sponsor",
 ] as const satisfies readonly UserRole[];
 
 export type PublicRegisterRole = (typeof PUBLIC_REGISTER_ROLES)[number];
@@ -23,13 +25,11 @@ export const registerSchema = z.object({
     .min(8, "Şifre en az 8 karakter olmalıdır.")
     .regex(/\p{L}/u, "Şifre en az bir harf içermelidir.")
     .regex(/\d/, "Şifre en az bir rakam içermelidir."),
-  name: z
-    .string()
+  name: safeText()
     .trim()
     .min(2, "Ad en az 2 karakter olmalıdır.")
     .max(50, "Ad en fazla 50 karakter olabilir."),
-  surname: z
-    .string()
+  surname: safeText()
     .trim()
     .min(2, "Soyad en az 2 karakter olmalıdır.")
     .max(50, "Soyad en fazla 50 karakter olabilir."),

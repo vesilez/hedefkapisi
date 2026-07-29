@@ -3,6 +3,7 @@ export const ACHIEVEMENT_IDS = [
   "first_like",
   "first_support",
   "first_chat",
+  "sponsor_badge",
 ] as const;
 
 export type AchievementId = (typeof ACHIEVEMENT_IDS)[number];
@@ -33,5 +34,10 @@ export const ACHIEVEMENTS: readonly AchievementDefinition[] = [
     id: "first_chat",
     title: "İlk Sohbet",
     description: "İlk destek görüşmende mesaj göndererek iletişimi başlattın.",
+  },
+  {
+    id: "sponsor_badge",
+    title: "Onaylı Sponsor",
+    description: "Kurum profilin onaylandı ve resmi sponsor olarak yerini aldın.",
   },
 ] as const;

@@ -29,6 +29,12 @@ function getNotificationTarget(notification: Notification): string {
       return "/fikirlerim";
     case "chat_message":
       return "/mesajlar";
+    case "admin_activity":
+      return "/admin/sponsorlar";
+    case "sponsor_approved":
+      return "/sponsor-paneli";
+    case "sponsor_support_received":
+      return "/fikirlerim";
   }
 }
 

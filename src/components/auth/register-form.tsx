@@ -24,6 +24,7 @@ const ROLE_DESCRIPTIONS: Record<PublicRegisterRole, string> = {
   student: "Hayalini veya fikrini paylaş.",
   supporter: "Fikirlere bilgi, bağlantı veya kaynak desteği sun.",
   mentor: "Deneyiminle öğrencilere yol göster.",
+  sponsor: "Kurumun adına hayallere resmi destek ver.",
 };
 
 export function RegisterForm() {
@@ -314,7 +315,7 @@ export function RegisterForm() {
           <legend className="text-sm font-semibold text-slate-800">
             Kullanıcı rolü
           </legend>
-          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {PUBLIC_REGISTER_ROLES.map((role) => (
               <label key={role} className="cursor-pointer">
                 <input

@@ -73,6 +73,14 @@
         { "fieldPath": "mentorshipId", "order": "ASCENDING" },
         { "fieldPath": "mentorId", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "sponsorSupports",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "sponsorId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

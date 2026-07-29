@@ -19,6 +19,7 @@ import {
   phoneSchema,
   urlSchema,
 } from "./common-schema";
+import { safeText } from "./safe-text";
 
 const optionalLimitedText = (maximum: number, message: string) =>
   z.string().trim().max(maximum, message).nullable().optional();
@@ -27,13 +28,11 @@ const uniqueValues = (values: readonly string[]) =>
   new Set(values).size === values.length;
 
 export const baseUserProfileSchema = z.object({
-  name: z
-    .string()
+  name: safeText()
     .trim()
     .min(2, "Ad en az 2 karakter olmalıdır.")
     .max(50, "Ad en fazla 50 karakter olabilir."),
-  surname: z
-    .string()
+  surname: safeText()
     .trim()
     .min(2, "Soyad en az 2 karakter olmalıdır.")
     .max(50, "Soyad en fazla 50 karakter olabilir."),
@@ -48,8 +47,7 @@ export const studentProfileSchema = z.object({
   schoolType: z.enum(SCHOOL_TYPES, {
     error: "Geçerli bir okul türü seçin.",
   }),
-  schoolName: z
-    .string()
+  schoolName: safeText()
     .trim()
     .min(2, "Okul adı en az 2 karakter olmalıdır.")
     .max(150, "Okul adı en fazla 150 karakter olabilir."),
@@ -92,13 +90,11 @@ export const supporterProfileSchema = z.object({
 });
 
 export const mentorProfileSchema = z.object({
-  profession: z
-    .string()
+  profession: safeText()
     .trim()
     .min(1, "Meslek alanı zorunludur.")
     .max(120, "Meslek en fazla 120 karakter olabilir."),
-  organization: z
-    .string()
+  organization: safeText()
     .trim()
     .max(200, "Çalışılan kurum en fazla 200 karakter olabilir."),
   expertiseAreas: z
@@ -110,8 +106,7 @@ export const mentorProfileSchema = z.object({
     .int("Deneyim yılı tam sayı olmalıdır.")
     .min(0, "Deneyim yılı 0'dan küçük olamaz.")
     .max(60, "Deneyim yılı 60'tan büyük olamaz."),
-  biography: z
-    .string()
+  biography: safeText()
     .trim()
     .min(30, "Biyografi en az 30 karakter olmalıdır.")
     .max(1000, "Biyografi en fazla 1000 karakter olabilir."),
