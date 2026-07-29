@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { AuthProvider } from "@/components/auth";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
+import { ServiceWorkerRegistration } from "@/components/pwa/service-worker-registration";
 import { siteConfig } from "@/config/site";
 import "./globals.css";
 
@@ -16,6 +17,11 @@ export const metadata: Metadata = {
   category: "education",
   alternates: { canonical: "/" },
   manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "HedefKapısı",
+  },
   openGraph: {
     type: "website",
     locale: "tr_TR",
@@ -32,17 +38,18 @@ export const metadata: Metadata = {
     images: ["/opengraph-image"],
   },
   icons: {
-    icon: [{ url: "/icon", type: "image/png" }],
+    icon: [
+      { url: "/icon", type: "image/png", sizes: "512x512" },
+      { url: "/pwa-icon/192", type: "image/png", sizes: "192x192" },
+      { url: "/pwa-icon/512", type: "image/png", sizes: "512x512" },
+    ],
     apple: [{ url: "/apple-icon", type: "image/png" }],
   },
 };
 
 export const viewport: Viewport = {
   colorScheme: "light dark",
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#020617" },
-  ],
+  themeColor: "#2563eb",
 };
 
 export default function RootLayout({
@@ -85,6 +92,7 @@ export default function RootLayout({
         />
       </head>
       <body>
+        <ServiceWorkerRegistration />
         <AuthProvider>
           <div className="flex min-h-screen flex-col">
             <SiteHeader />
