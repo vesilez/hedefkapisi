@@ -778,6 +778,32 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /dailyActiveUsers/{activityId} {
+      allow read: if isAdmin();
+      allow create, update: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          "id", "userId", "date", "lastActiveAt"
+        ])
+        && request.resource.data.id == activityId
+        && request.resource.data.userId == request.auth.uid
+        && activityId == request.resource.data.date + "__" + request.auth.uid
+        && request.resource.data.date is string
+        && request.resource.data.date.matches("^\\d{4}-\\d{2}-\\d{2}$")
+        && request.resource.data.lastActiveAt == request.time;
+      allow delete: if false;
+    }
+
+    match /userActivity/{userId} {
+      allow read: if isAdmin()
+        || (signedIn() && request.auth.uid == userId);
+      allow create, update: if signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.keys().hasOnly(["userId", "lastActiveAt"])
+        && request.resource.data.userId == userId
+        && request.resource.data.lastActiveAt == request.time;
+      allow delete: if false;
+    }
+
     match /sponsorProfiles/{sponsorId} {
       function validProfileFields() {
         return request.resource.data.institutionName is string

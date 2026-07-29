@@ -3,6 +3,7 @@ import { AuthProvider } from "@/components/auth";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { ServiceWorkerRegistration } from "@/components/pwa/service-worker-registration";
+import { UserActivityTracker } from "@/components/analytics/user-activity-tracker";
 import { siteConfig } from "@/config/site";
 import "./globals.css";
 
@@ -94,6 +95,7 @@ export default function RootLayout({
       <body>
         <ServiceWorkerRegistration />
         <AuthProvider>
+          <UserActivityTracker />
           <div className="flex min-h-screen flex-col">
             <SiteHeader />
             <main className="flex-1">{children}</main>
