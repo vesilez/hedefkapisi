@@ -50,6 +50,7 @@ export interface BaseUser {
   profileCompleted: boolean;
   emailVerified: boolean;
   avatarUrl: Nullable<string>;
+  score: number;
   createdAt: ISODateString;
   updatedAt: ISODateString;
 }

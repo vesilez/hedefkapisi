@@ -7,10 +7,7 @@ import {
   type UserRole,
 } from "@/constants/roles";
 import { SUPPORT_TYPES } from "@/constants/support-types";
-import {
-  USER_STATUSES,
-  type UserStatus,
-} from "@/constants/user-statuses";
+import { USER_STATUSES, type UserStatus } from "@/constants/user-statuses";
 import { auth } from "@/lib/firebase/auth";
 import { db } from "@/lib/firebase/firestore";
 import {
@@ -37,6 +34,7 @@ import {
   type DocumentSnapshot,
   collection,
   doc,
+  writeBatch,
   getCountFromServer,
   getDoc,
   getDocFromServer,
@@ -55,7 +53,8 @@ type UserServiceFailure = {
   error: { code: string; message: string };
 };
 
-export type UserServiceResult<T> = { success: true; data: T } | UserServiceFailure;
+export type UserServiceResult<T> =
+  { success: true; data: T } | UserServiceFailure;
 
 export type SaveUserProfileInput = ProfileFormValues &
   Pick<
@@ -151,6 +150,7 @@ const userProfileDocumentSchema = z.object({
   profileCompleted: z.boolean(),
   emailVerified: z.boolean(),
   avatarUrl: nullableTextSchema,
+  score: z.number().int().nonnegative().optional().default(0),
   createdAt: firestoreTimestampSchema,
   updatedAt: firestoreTimestampSchema,
   studentProfile: z
@@ -211,21 +211,6 @@ function failure(error: unknown): UserServiceFailure {
       message: getFirebaseErrorMessage(error),
     },
   };
-}
-
-function logAccessSnapshot(
-  userId: string,
-  snapshot: DocumentSnapshot<DocumentData>,
-): void {
-  if (process.env.NODE_ENV !== "development") return;
-
-  const role: unknown = snapshot.exists() ? snapshot.data().role : undefined;
-  console.info("[admin-access] auth uid present:", userId.length > 0);
-  console.info("[admin-access] profile document found:", snapshot.exists());
-  console.info(
-    "[admin-access] profile role:",
-    typeof role === "string" ? role : "invalid",
-  );
 }
 
 function mapUserAccessSnapshot(
@@ -472,25 +457,35 @@ export async function createUserDocument(
   }
 
   try {
-    await setDoc(
-      doc(db, "users", input.uid),
-      {
-        id: input.uid,
-        role: input.role,
-        name: input.name,
-        surname: input.surname,
-        email: input.email,
-        phone: "",
-        city: "",
-        status: "active",
-        profileCompleted: false,
-        emailVerified: input.emailVerified,
-        avatarUrl: null,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      },
-      { merge: false },
-    );
+    const batch = writeBatch(db);
+    batch.set(doc(db, "users", input.uid), {
+      id: input.uid,
+      role: input.role,
+      name: input.name,
+      surname: input.surname,
+      email: input.email,
+      phone: "",
+      city: "",
+      status: "active",
+      profileCompleted: false,
+      emailVerified: input.emailVerified,
+      avatarUrl: null,
+      score: 0,
+      lastScoreEventId: null,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    batch.set(doc(db, "leaderboard", input.uid), {
+      userId: input.uid,
+      name: input.name,
+      surname: input.surname,
+      avatarUrl: null,
+      role: input.role,
+      score: 0,
+      achievementCount: 0,
+      updatedAt: serverTimestamp(),
+    });
+    await batch.commit();
 
     return { success: true, data: undefined };
   } catch (error: unknown) {
@@ -528,7 +523,6 @@ export async function getUserAccessProfile(
 ): Promise<UserServiceResult<UserAccessProfile | null>> {
   try {
     const snapshot = await getDoc(doc(db, "users", userId));
-    logAccessSnapshot(userId, snapshot);
     return mapUserAccessSnapshot(snapshot);
   } catch (error: unknown) {
     const result = failure(error);
@@ -553,7 +547,6 @@ export function subscribeToUserAccessProfile(
     (snapshot) => {
       // Yetki kararında kalıcı/yerel cache yerine Firestore sunucu verisini kullan.
       if (snapshot.metadata.fromCache) return;
-      logAccessSnapshot(userId, snapshot);
       listener(mapUserAccessSnapshot(snapshot));
     },
     (error: unknown) => {
@@ -605,8 +598,7 @@ export async function updateUserProfile(
         ? supporterProfileSchema.safeParse({
             userId,
             supporterType: input.supporterProfile?.supporterType,
-            organizationName:
-              input.supporterProfile?.organizationName || null,
+            organizationName: input.supporterProfile?.organizationName || null,
             title: input.supporterProfile?.title || null,
             expertiseAreas: input.supporterProfile?.expertiseAreas,
             supportTypes: input.supporterProfile?.supportTypes,
@@ -679,9 +671,7 @@ export async function updateUserProfile(
             }
           : null,
       supporterProfile:
-        input.role === "supporter"
-          ? supporterProfile?.data
-          : null,
+        input.role === "supporter" ? supporterProfile?.data : null,
       mentorProfile:
         input.role === "mentor"
           ? mentorProfile?.success
@@ -719,8 +709,7 @@ export async function updateUserProfile(
         success: false,
         error: {
           code: "firestore/profile-write-not-confirmed",
-          message:
-            "Profil bilgileri kaydedilemedi. Lütfen tekrar deneyin.",
+          message: "Profil bilgileri kaydedilemedi. Lütfen tekrar deneyin.",
         },
       };
     }
@@ -745,10 +734,64 @@ export async function updateUserProfile(
           success: false,
           error: {
             code: "firestore/profile-completion-not-confirmed",
-            message:
-              "Destekçi profili tamamlanamadı. Lütfen tekrar deneyin.",
+            message: "Destekçi profili tamamlanamadı. Lütfen tekrar deneyin.",
           },
         };
+      }
+    }
+
+    const finalProfile = await getDocFromServer(userReference);
+    if (finalProfile.exists()) {
+      const rawAchievements: unknown = finalProfile.data().achievements;
+      const achievementCount =
+        typeof rawAchievements === "object" && rawAchievements !== null
+          ? Object.values(rawAchievements).filter(
+              (value) =>
+                typeof value === "object" &&
+                value !== null &&
+                Reflect.get(value, "unlocked") === true,
+            ).length
+          : 0;
+      const rawScore: unknown = finalProfile.data().score;
+      await setDoc(
+        doc(db, "leaderboard", userId),
+        {
+          userId,
+          name: input.name,
+          surname: input.surname,
+          avatarUrl: input.avatarUrl,
+          role: existingRole,
+          score:
+            typeof rawScore === "number" &&
+            Number.isInteger(rawScore) &&
+            rawScore >= 0
+              ? rawScore
+              : 0,
+          achievementCount,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+      if (existingRole === "mentor" && mentorProfile?.success) {
+        await setDoc(
+          doc(db, "mentorProfiles", userId),
+          {
+            mentorId: userId,
+            name: input.name,
+            surname: input.surname,
+            avatarUrl: input.avatarUrl,
+            city: input.city || null,
+            profession: mentorProfile.data.profession,
+            organization: mentorProfile.data.organization,
+            expertiseAreas: mentorProfile.data.expertiseAreas,
+            mentoringTopics: mentorProfile.data.mentoringTopics,
+            availability: mentorProfile.data.availability,
+            biography: mentorProfile.data.biography,
+            status: "active",
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
       }
     }
 

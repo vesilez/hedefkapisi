@@ -36,9 +36,23 @@ import {
   Users,
 } from "lucide-react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type ComponentType } from "react";
-import { AdminAnalyticsSection } from "./admin-analytics-charts";
+
+const AdminAnalyticsSection = dynamic(
+  () =>
+    import("./admin-analytics-charts").then(
+      (module) => module.AdminAnalyticsSection,
+    ),
+  {
+    loading: () => (
+      <div className="flex min-h-64 items-center justify-center">
+        <LoadingSpinner label="Grafikler yükleniyor..." />
+      </div>
+    ),
+  },
+);
 
 interface DashboardStatistics {
   users: AdminUserStatistics;

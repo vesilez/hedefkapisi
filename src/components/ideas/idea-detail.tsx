@@ -16,6 +16,7 @@ import {
   Lightbulb,
   Link2,
   MapPin,
+  MessageCircle,
   Radio,
   Sparkles,
   Star,
@@ -24,6 +25,7 @@ import {
   UsersRound,
   type LucideIcon,
 } from "lucide-react";
+import { useState } from "react";
 import { IdeaComments } from "./idea-comments";
 import { IdeaEngagement } from "./idea-engagement";
 
@@ -62,6 +64,7 @@ function DetailSection({
 }
 
 export function IdeaDetail({ idea }: { idea: PublicIdeaDetail }) {
+  const [commentCount, setCommentCount] = useState(idea.commentCount);
   const categoryLabel =
     DEFAULT_CATEGORIES.find((item) => item.id === idea.categoryId)?.label ??
     "Diğer";
@@ -73,8 +76,8 @@ export function IdeaDetail({ idea }: { idea: PublicIdeaDetail }) {
     { href: idea.prototypeUrl, label: "Prototipi İncele" },
     { href: idea.githubUrl, label: "GitHub Deposunu Aç" },
     { href: idea.websiteUrl, label: "Proje Web Sitesini Aç" },
-  ].filter(
-    (link): link is { href: string; label: string } => Boolean(link.href),
+  ].filter((link): link is { href: string; label: string } =>
+    Boolean(link.href),
   );
 
   return (
@@ -112,7 +115,7 @@ export function IdeaDetail({ idea }: { idea: PublicIdeaDetail }) {
             {idea.shortDescription}
           </p>
 
-          <dl className="mt-7 grid gap-3 border-t border-blue-100 pt-6 sm:grid-cols-2 lg:grid-cols-4">
+          <dl className="mt-7 grid gap-3 border-t border-blue-100 pt-6 sm:grid-cols-2 lg:grid-cols-5">
             <div className="flex min-w-0 items-start gap-2.5">
               <MapPin
                 aria-hidden="true"
@@ -159,11 +162,23 @@ export function IdeaDetail({ idea }: { idea: PublicIdeaDetail }) {
                 className="mt-0.5 size-4 shrink-0 text-blue-700"
               />
               <div>
-                <dt className="text-xs font-semibold text-slate-500">
-                  Destek
-                </dt>
+                <dt className="text-xs font-semibold text-slate-500">Destek</dt>
                 <dd className="mt-0.5 text-sm font-bold text-slate-800">
                   {idea.supportCount} başvuru
+                </dd>
+              </div>
+            </div>
+            <div className="flex min-w-0 items-start gap-2.5">
+              <MessageCircle
+                aria-hidden="true"
+                className="mt-0.5 size-4 shrink-0 text-blue-700"
+              />
+              <div>
+                <dt className="text-xs font-semibold text-slate-500">
+                  Yorumlar
+                </dt>
+                <dd className="mt-0.5 text-sm font-bold text-slate-800">
+                  {commentCount} yorum
                 </dd>
               </div>
             </div>
@@ -258,7 +273,7 @@ export function IdeaDetail({ idea }: { idea: PublicIdeaDetail }) {
       )}
 
       <SupportRequestForm ideaId={idea.id} />
-      <IdeaComments ideaId={idea.id} />
+      <IdeaComments ideaId={idea.id} onCountChange={setCommentCount} />
     </main>
   );
 }

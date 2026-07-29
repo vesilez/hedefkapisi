@@ -115,10 +115,9 @@ export async function registerWithEmailAndPassword(
       data: mapFirebaseUser(credential.user),
     };
   } catch (error: unknown) {
-  console.log("FIREBASE LOGIN ERROR:", error);
-  return firebaseFailure(error);
-    }
+    return firebaseFailure(error);
   }
+}
 
 export async function loginWithEmailAndPassword(
   input: LoginInput,
@@ -173,7 +172,6 @@ export async function sendPasswordReset(
 
     return { success: true, data: undefined };
   } catch (error: unknown) {
-    console.log("PASSWORD RESET ERROR:", error);
     return firebaseFailure(error);
   }
 }
@@ -196,9 +194,8 @@ export async function sendVerificationEmail(): Promise<AuthResult<void>> {
 
     return { success: true, data: undefined };
   } catch (error: unknown) {
-  console.log("PASSWORD RESET ERROR:", error);
-  return firebaseFailure(error);
-}
+    return firebaseFailure(error);
+  }
 }
 
 export function getCurrentAuthUser(): AuthUser | null {

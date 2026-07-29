@@ -3,14 +3,7 @@
 import { useAuth } from "@/hooks/use-auth";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import {
-  LogIn,
-  Menu,
-  MessageCircle,
-  Target,
-  UserPlus,
-  X,
-} from "lucide-react";
+import { LogIn, Menu, MessageCircle, Target, UserPlus, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { mainNavigation } from "@/config/navigation";
 import { siteConfig } from "@/config/site";
@@ -78,7 +71,7 @@ export function SiteHeader() {
         </Link>
         <nav
           aria-label="Ana menü"
-          className="ml-3 hidden items-center gap-1 lg:flex xl:ml-6"
+          className="ml-3 hidden items-center gap-1 2xl:flex 2xl:ml-6"
         >
           {mainNavigation.map((item) => {
             const isActive =
@@ -110,7 +103,7 @@ export function SiteHeader() {
         <div className={`${user ? "" : "ml-auto"} shrink-0`}>
           <ThemeToggle compact />
         </div>
-        <div className="hidden items-center gap-2 lg:flex">
+        <div className="hidden items-center gap-2 2xl:flex">
           {!loading &&
             (user ? (
               <>
@@ -121,6 +114,15 @@ export function SiteHeader() {
                       className="rounded-xl px-4 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-50"
                     >
                       Fikirlerim
+                    </Link>
+                  )}
+                {profileAccess?.userId === user.id &&
+                  profileAccess.role === "mentor" && (
+                    <Link
+                      href="/mentorluk"
+                      className="rounded-xl px-4 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-50"
+                    >
+                      Mentor Paneli
                     </Link>
                   )}
                 <Link
@@ -146,7 +148,7 @@ export function SiteHeader() {
                   type="button"
                   onClick={handleLogout}
                   disabled={loggingOut}
-                className="min-h-10 rounded-xl bg-blue-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:-translate-y-0.5 hover:bg-blue-800 hover:shadow-md focus-visible:outline-blue-700 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="min-h-10 rounded-xl bg-blue-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:-translate-y-0.5 hover:bg-blue-800 hover:shadow-md focus-visible:outline-blue-700 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {loggingOut ? "Çıkış yapılıyor..." : "Çıkış Yap"}
                 </button>
@@ -172,7 +174,7 @@ export function SiteHeader() {
         </div>
         <details
           ref={mobileMenuRef}
-          className="group shrink-0 lg:hidden"
+          className="group shrink-0 2xl:hidden"
           onKeyDown={(event) => {
             if (event.key === "Escape") closeMobileMenu();
           }}
@@ -232,6 +234,16 @@ export function SiteHeader() {
                         className="flex min-h-11 items-center rounded-lg px-3 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-50"
                       >
                         Fikirlerim
+                      </Link>
+                    )}
+                  {profileAccess?.userId === user.id &&
+                    profileAccess.role === "mentor" && (
+                      <Link
+                        href="/mentorluk"
+                        onClick={closeMobileMenu}
+                        className="flex min-h-11 items-center rounded-lg px-3 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-50"
+                      >
+                        Mentor Paneli
                       </Link>
                     )}
                   <Link

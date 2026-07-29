@@ -4,6 +4,8 @@ import { siteConfig } from "@/config/site";
 const routes = [
   { path: "/", changeFrequency: "weekly", priority: 1 },
   { path: "/hayaller", changeFrequency: "daily", priority: 0.9 },
+  { path: "/liderlik", changeFrequency: "daily", priority: 0.8 },
+  { path: "/mentorlar", changeFrequency: "weekly", priority: 0.8 },
   { path: "/hakkimizda", changeFrequency: "monthly", priority: 0.7 },
   { path: "/sss", changeFrequency: "monthly", priority: 0.6 },
   { path: "/gizlilik-politikasi", changeFrequency: "yearly", priority: 0.3 },

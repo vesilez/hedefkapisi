@@ -2,7 +2,14 @@ import { IDEA_STAGES } from "@/constants/idea-stages";
 import { SUPPORT_TYPES } from "@/constants/support-types";
 import { db } from "@/lib/firebase/firestore";
 import type { PublicIdeaDetail } from "@/types/idea";
-import { collection, getDocs, limit, query, where } from "firebase/firestore";
+import {
+  collection,
+  getCountFromServer,
+  getDocs,
+  limit,
+  query,
+  where,
+} from "firebase/firestore";
 import { z } from "zod";
 
 export type PublicIdeaResult =
@@ -43,6 +50,7 @@ const publicIdeaSchema = z.object({
   isFeatured: z.boolean(),
   supportCount: z.number(),
   likeCount: z.number().int().nonnegative().optional().default(0),
+  commentCount: z.number().int().nonnegative().optional().default(0),
   prototypeUrl: z.string().nullable(),
   githubUrl: z.string().nullable(),
   websiteUrl: z.string().nullable(),
@@ -54,10 +62,6 @@ export async function getPublicIdeaBySlug(
   slug: string,
 ): Promise<PublicIdeaResult> {
   const normalizedSlug = slug.trim();
-  if (process.env.NODE_ENV === "development") {
-    console.info("[public-idea] route param:", normalizedSlug);
-    console.info("[public-idea] query type: slug");
-  }
   if (!normalizedSlug) return { success: true, data: null };
 
   try {
@@ -70,14 +74,6 @@ export async function getPublicIdeaBySlug(
       ),
     );
     const snapshot = snapshots.docs[0];
-    if (process.env.NODE_ENV === "development") {
-      console.info("[public-idea] document found:", Boolean(snapshot));
-      console.info("[public-idea] status:", snapshot?.data().status ?? null);
-      console.info(
-        "[public-idea] visibility:",
-        snapshot?.data().visibility ?? null,
-      );
-    }
     if (
       !snapshot ||
       snapshot.data().status !== "approved" ||
@@ -86,7 +82,17 @@ export async function getPublicIdeaBySlug(
       return { success: true, data: null };
     }
 
-    const parsed = publicIdeaSchema.safeParse(snapshot.data());
+    const commentCount = await getCountFromServer(
+      query(
+        collection(db, "comments"),
+        where("ideaId", "==", snapshot.id),
+        where("status", "==", "active"),
+      ),
+    );
+    const parsed = publicIdeaSchema.safeParse({
+      ...snapshot.data(),
+      commentCount: commentCount.data().count,
+    });
     if (!parsed.success) {
       return { success: true, data: null };
     }

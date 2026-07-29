@@ -64,6 +64,7 @@ export interface IdeaFormValues {
 
 export interface IdeaListItem {
   id: EntityId;
+  studentId?: EntityId;
   slug: string;
   title: string;
   shortDescription: string;
@@ -98,6 +99,7 @@ export interface PublicIdeaDetail {
   isFeatured: boolean;
   supportCount: number;
   likeCount: number;
+  commentCount: number;
   prototypeUrl: Nullable<string>;
   githubUrl: Nullable<string>;
   websiteUrl: Nullable<string>;

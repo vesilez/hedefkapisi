@@ -2,12 +2,7 @@ import { DEFAULT_CATEGORY_IDS } from "@/constants/default-categories";
 import { isSupportType, type SupportType } from "@/constants/support-types";
 import type { IdeaListItem } from "@/types/idea";
 
-export const PUBLIC_IDEA_SORTS = [
-  "newest",
-  "oldest",
-  "most_liked",
-  "most_commented",
-] as const;
+export const PUBLIC_IDEA_SORTS = ["newest", "most_liked"] as const;
 
 export type PublicIdeaSort = (typeof PUBLIC_IDEA_SORTS)[number];
 
@@ -69,27 +64,15 @@ export function filterAndSortIdeas(
     const matchesCity =
       !city || idea.city?.toLocaleLowerCase("tr-TR").includes(city);
     const matchesSupport =
-      !filters.supportType ||
-      idea.supportNeeds.includes(filters.supportType);
+      !filters.supportType || idea.supportNeeds.includes(filters.supportType);
 
-    return (
-      matchesSearch && matchesCategory && matchesCity && matchesSupport
-    );
+    return matchesSearch && matchesCategory && matchesCity && matchesSupport;
   });
 
   return filtered.sort((first, second) => {
-    if (filters.sort === "oldest") {
-      return first.createdAt.localeCompare(second.createdAt);
-    }
     if (filters.sort === "most_liked") {
       return (
         second.likeCount - first.likeCount ||
-        second.createdAt.localeCompare(first.createdAt)
-      );
-    }
-    if (filters.sort === "most_commented") {
-      return (
-        second.commentCount - first.commentCount ||
         second.createdAt.localeCompare(first.createdAt)
       );
     }

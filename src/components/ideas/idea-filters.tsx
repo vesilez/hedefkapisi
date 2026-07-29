@@ -2,10 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { DEFAULT_CATEGORIES } from "@/constants/default-categories";
-import {
-  SUPPORT_TYPES,
-  SUPPORT_TYPE_LABELS,
-} from "@/constants/support-types";
+import { SUPPORT_TYPES, SUPPORT_TYPE_LABELS } from "@/constants/support-types";
 import type { IdeaFilterValues } from "@/services/idea-filter-service";
 
 export type { IdeaFilterValues } from "@/services/idea-filter-service";
@@ -17,6 +14,13 @@ interface IdeaFiltersProps {
 }
 
 export function IdeaFilters({ values, onChange, onClear }: IdeaFiltersProps) {
+  const hasActiveFilters =
+    values.search.trim().length > 0 ||
+    values.categoryId.length > 0 ||
+    values.city.trim().length > 0 ||
+    values.supportType.length > 0 ||
+    values.sort !== "newest";
+
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
@@ -92,7 +96,8 @@ export function IdeaFilters({ values, onChange, onClear }: IdeaFiltersProps) {
             onChange={(event) =>
               onChange({
                 ...values,
-                supportType: event.target.value as IdeaFilterValues["supportType"],
+                supportType: event.target
+                  .value as IdeaFilterValues["supportType"],
               })
             }
           >
@@ -123,14 +128,17 @@ export function IdeaFilters({ values, onChange, onClear }: IdeaFiltersProps) {
             }
           >
             <option value="newest">En yeni</option>
-            <option value="oldest">En eski</option>
             <option value="most_liked">En çok beğenilen</option>
-            <option value="most_commented">En çok yorumlanan</option>
           </Select>
         </div>
       </div>
       <div className="mt-4 flex justify-end">
-        <Button type="button" variant="ghost" onClick={onClear}>
+        <Button
+          type="button"
+          variant="ghost"
+          disabled={!hasActiveFilters}
+          onClick={onClear}
+        >
           Filtreleri Temizle
         </Button>
       </div>

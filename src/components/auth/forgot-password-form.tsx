@@ -28,16 +28,13 @@ export function ForgotPasswordForm() {
   });
 
   const onSubmit = handleSubmit(async (values) => {
-    console.log("FORM SUBMIT ÇALIŞTI", values);
     setFeedback(null);
     const result = await sendPasswordReset(values);
-    console.log("RESET RESULT:", result);
     setFeedback(
       result.success
         ? {
             type: "success",
-            message:
-              "Şifre sıfırlama bağlantısı e-posta adresine gönderildi.",
+            message: "Şifre sıfırlama bağlantısı e-posta adresine gönderildi.",
           }
         : { type: "error", message: result.error.message },
     );
@@ -66,7 +63,10 @@ export function ForgotPasswordForm() {
       )}
 
       <form onSubmit={onSubmit} noValidate>
-        <label htmlFor="reset-email" className="text-sm font-semibold text-slate-800">
+        <label
+          htmlFor="reset-email"
+          className="text-sm font-semibold text-slate-800"
+        >
           E-posta
         </label>
         <Input

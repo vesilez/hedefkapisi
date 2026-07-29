@@ -1,11 +1,13 @@
 import "client-only";
 
 import { IDEA_STAGES } from "@/constants/idea-stages";
+import { LEADERBOARD_POINTS } from "@/constants/leaderboard";
 import { SUPPORT_TYPES } from "@/constants/support-types";
 import { auth } from "@/lib/firebase/auth";
 import { db } from "@/lib/firebase/firestore";
 import { getFirebaseErrorMessage } from "@/lib/firebase/firebase-error";
 import { createNotification } from "@/services/notification-service";
+import { applyScoreInTransaction } from "@/services/leaderboard-service";
 import type {
   FavoriteIdeaItem,
   IdeaEngagementState,
@@ -161,6 +163,12 @@ export async function toggleIdeaLike(
       const ownerId =
         typeof idea.data().studentId === "string" ? idea.data().studentId : "";
       const like = await transaction.get(likeReference);
+      const scoreEvent = await transaction.get(
+        doc(db, "scoreEvents", `like__${likeReference.id}`),
+      );
+      const owner = ownerId
+        ? await transaction.get(doc(db, "users", ownerId))
+        : null;
 
       const rawCount: unknown = idea.data().likeCount;
       const currentCount =
@@ -181,6 +189,17 @@ export async function toggleIdeaLike(
         transaction.delete(likeReference);
       }
       transaction.update(ideaReference, { likeCount });
+      if (owner?.exists() && (isLiked || scoreEvent.exists())) {
+        applyScoreInTransaction(
+          transaction,
+          owner,
+          "like",
+          likeReference.id,
+          isLiked
+            ? LEADERBOARD_POINTS.likeReceived
+            : -LEADERBOARD_POINTS.likeReceived,
+        );
+      }
       return {
         isLiked,
         likeCount,

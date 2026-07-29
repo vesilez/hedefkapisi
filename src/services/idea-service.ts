@@ -19,6 +19,8 @@ import {
   notifyAllAdmins,
 } from "@/services/notification-service";
 import { grantAchievementInTransaction } from "@/services/achievement-service";
+import { LEADERBOARD_POINTS } from "@/constants/leaderboard";
+import { applyScoreInTransaction } from "@/services/leaderboard-service";
 import {
   IDEA_VISIBILITIES,
   type Idea,
@@ -124,6 +126,7 @@ const ideaDocumentSchema = z.object({
 
 const ideaListItemSchema = z.object({
   id: z.string().min(1),
+  studentId: z.string().min(1),
   slug: z.string().min(1),
   title: z.string(),
   shortDescription: z.string(),
@@ -294,11 +297,19 @@ export async function createIdea(
       });
 
       if (input.submitAction === "submit_for_review") {
-        grantAchievementInTransaction(
+        const achievementGranted = grantAchievementInTransaction(
           transaction,
           studentId,
           profile.data(),
           "first_dream",
+        );
+        applyScoreInTransaction(
+          transaction,
+          profile,
+          "dream",
+          ideaReference.id,
+          LEADERBOARD_POINTS.dreamShared,
+          achievementGranted ? 1 : 0,
         );
       }
     });
@@ -424,12 +435,22 @@ export async function updateIdea(
         updatedAt: serverTimestamp(),
       });
       if (submitAction === "submit_for_review") {
-        grantAchievementInTransaction(
+        const achievementGranted = grantAchievementInTransaction(
           transaction,
           studentId,
           profile.data(),
           "first_dream",
         );
+        if (currentStatus === "draft") {
+          applyScoreInTransaction(
+            transaction,
+            profile,
+            "dream",
+            ideaId,
+            LEADERBOARD_POINTS.dreamShared,
+            achievementGranted ? 1 : 0,
+          );
+        }
       }
     });
 
@@ -497,21 +518,6 @@ export async function getIdeasByStudent(
       query(collection(db, "ideas"), where("studentId", "==", studentId)),
     );
 
-    if (process.env.NODE_ENV === "development") {
-      console.info("[idea-service:getIdeasByStudent] query:", {
-        authUid: auth.currentUser.uid,
-        ownerField: "studentId",
-        documentCount: snapshots.size,
-      });
-      for (const snapshot of snapshots.docs) {
-        const rawStudentId: unknown = snapshot.data().studentId;
-        console.info("[idea-service:getIdeasByStudent] document:", {
-          id: snapshot.id,
-          studentId:
-            typeof rawStudentId === "string" ? rawStudentId : "invalid",
-        });
-      }
-    }
     const ideas: Idea[] = [];
 
     for (const snapshot of snapshots.docs) {

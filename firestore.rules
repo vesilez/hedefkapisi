@@ -48,17 +48,70 @@ service cloud.firestore {
         && (!("first_chat" in achievements) || validAchievement(achievements.first_chat));
     }
 
-    function validAchievementBackfill() {
+    function achievementCount(data) {
+      let achievements = data.get("achievements", {});
+      return (("first_dream" in achievements) ? 1 : 0)
+        + (("first_like" in achievements) ? 1 : 0)
+        + (("first_support" in achievements) ? 1 : 0)
+        + (("first_chat" in achievements) ? 1 : 0);
+    }
+
+    function validAchievementGrowth() {
       let before = resource.data.get("achievements", {});
       let after = request.resource.data.get("achievements", {});
-      return request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(["achievements"])
-        && validAchievements(request.resource.data)
+      return validAchievements(request.resource.data)
         && after.keys().hasAll(before.keys())
         && after.diff(before).removedKeys().size() == 0;
     }
 
+    function validAchievementBackfill() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(["achievements"])
+        && validAchievementGrowth();
+    }
+
     match /users/{userId} {
+      function validScoreUpdate() {
+        let eventId = request.resource.data.lastScoreEventId;
+        let eventPath = /databases/$(database)/documents/scoreEvents/$(eventId);
+        let eventExisted = exists(eventPath);
+        let eventExistsAfter = existsAfter(eventPath);
+        let event = eventExistsAfter ? getAfter(eventPath).data : get(eventPath).data;
+        let beforeAchievements = resource.data.get("achievements", {});
+        let afterAchievements = request.resource.data.get("achievements", {});
+        return request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(["score", "lastScoreEventId", "achievements"])
+          && (
+            afterAchievements == beforeAchievements
+            || (
+              validAchievementGrowth()
+              && (
+                (event.type == "dream"
+                  && afterAchievements.diff(beforeAchievements).affectedKeys()
+                    .hasOnly(["first_dream"]))
+                || (event.type == "completed_support"
+                  && afterAchievements.diff(beforeAchievements).affectedKeys()
+                    .hasOnly(["first_support"]))
+              )
+            )
+          )
+          && event.userId == userId
+          && (
+            (
+              !eventExisted
+              && eventExistsAfter
+              && request.resource.data.score == resource.data.get("score", 0) + event.points
+            )
+            || (
+              eventExisted
+              && !eventExistsAfter
+              && event.type == "like"
+              && request.resource.data.score == resource.data.get("score", 0) - 2
+            )
+          )
+          && request.resource.data.score >= 0;
+      }
+
       allow create: if signedIn()
         && request.auth.uid == userId
         && request.resource.data.id == userId
@@ -68,10 +121,12 @@ service cloud.firestore {
         && request.resource.data.emailVerified == request.auth.token.email_verified
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time
+        && request.resource.data.score == 0
+        && request.resource.data.lastScoreEventId == null
         && request.resource.data.keys().hasOnly([
           "id", "role", "name", "surname", "email", "phone", "city",
           "status", "profileCompleted", "emailVerified", "avatarUrl",
-          "createdAt", "updatedAt"
+          "score", "lastScoreEventId", "createdAt", "updatedAt"
         ]);
 
       allow read: if signedIn() && (request.auth.uid == userId || isAdmin());
@@ -92,8 +147,11 @@ service cloud.firestore {
               && request.resource.data.email == resource.data.email
               && request.resource.data.emailVerified == resource.data.emailVerified
               && request.resource.data.get("achievements", {}) == resource.data.get("achievements", {})
+              && request.resource.data.get("score", 0) == resource.data.get("score", 0)
+              && request.resource.data.get("lastScoreEventId", null) == resource.data.get("lastScoreEventId", null)
             )
             || validAchievementBackfill()
+            || validScoreUpdate()
           )
         )
         || (
@@ -116,6 +174,269 @@ service cloud.firestore {
       allow delete: if isSuperAdmin() && request.auth.uid != userId;
     }
 
+    match /scoreEvents/{eventId} {
+      function validEvent() {
+        let type = request.resource.data.type;
+        let sourceId = request.resource.data.sourceId;
+        let userId = request.resource.data.userId;
+        return request.resource.data.id == eventId
+          && eventId == type + "__" + sourceId
+          && request.resource.data.createdAt == request.time
+          && (
+            (
+              type == "dream"
+              && request.resource.data.points == 20
+              && getAfter(/databases/$(database)/documents/ideas/$(sourceId)).data.studentId == userId
+              && getAfter(/databases/$(database)/documents/ideas/$(sourceId)).data.status != "draft"
+            )
+            || (
+              type == "support"
+              && request.resource.data.points == 15
+              && getAfter(/databases/$(database)/documents/supportRequests/$(sourceId)).data.supporterId == userId
+            )
+            || (
+              type == "comment"
+              && request.resource.data.points == 5
+              && getAfter(/databases/$(database)/documents/comments/$(sourceId)).data.userId == userId
+              && getAfter(/databases/$(database)/documents/comments/$(sourceId)).data.status == "active"
+            )
+            || (
+              type == "like"
+              && request.resource.data.points == 2
+              && getAfter(/databases/$(database)/documents/ideas/$(getAfter(/databases/$(database)/documents/likes/$(sourceId)).data.ideaId)).data.studentId == userId
+            )
+            || (
+              type == "completed_support"
+              && request.resource.data.points == 30
+              && getAfter(/databases/$(database)/documents/supportRequests/$(sourceId)).data.supporterId == userId
+              && getAfter(/databases/$(database)/documents/supportRequests/$(sourceId)).data.status == "approved"
+            )
+          );
+      }
+
+      allow read: if false;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          "id", "type", "sourceId", "userId", "points", "createdAt"
+        ])
+        && validEvent();
+      allow update: if false;
+      allow delete: if signedIn()
+        && resource.data.type == "like"
+        && get(/databases/$(database)/documents/likes/$(resource.data.sourceId)).data.userId == request.auth.uid
+        && !existsAfter(/databases/$(database)/documents/likes/$(resource.data.sourceId));
+    }
+
+    match /leaderboard/{userId} {
+      function publicUserData() {
+        return getAfter(/databases/$(database)/documents/users/$(userId)).data;
+      }
+
+      function validProjection() {
+        let user = publicUserData();
+        return request.resource.data.keys().hasOnly([
+            "userId", "name", "surname", "avatarUrl", "role", "score",
+            "achievementCount", "updatedAt"
+          ])
+          && request.resource.data.userId == userId
+          && request.resource.data.name == user.name
+          && request.resource.data.surname == user.surname
+          && request.resource.data.avatarUrl == user.get("avatarUrl", null)
+          && request.resource.data.role == user.role
+          && request.resource.data.score == user.get("score", 0)
+          && request.resource.data.achievementCount == achievementCount(user)
+          && request.resource.data.updatedAt == request.time;
+      }
+
+      allow read: if true;
+      allow create: if signedIn() && validProjection();
+      allow update: if signedIn() && validProjection();
+      allow delete: if false;
+    }
+
+    match /mentorProfiles/{mentorId} {
+      function mentorUser() {
+        return get(/databases/$(database)/documents/users/$(mentorId));
+      }
+
+      function validMentorProfile() {
+        let user = mentorUser().data;
+        return request.resource.data.keys().hasOnly([
+            "mentorId", "name", "surname", "avatarUrl", "city",
+            "profession", "organization", "expertiseAreas",
+            "mentoringTopics", "availability", "biography", "status",
+            "updatedAt"
+          ])
+          && request.resource.data.mentorId == mentorId
+          && user.role == "mentor"
+          && request.resource.data.name == user.name
+          && request.resource.data.surname == user.surname
+          && request.resource.data.avatarUrl == user.get("avatarUrl", null)
+          && request.resource.data.city == user.get("city", null)
+          && request.resource.data.profession is string
+          && request.resource.data.profession.size() <= 120
+          && request.resource.data.organization is string
+          && request.resource.data.organization.size() <= 160
+          && request.resource.data.expertiseAreas is list
+          && request.resource.data.expertiseAreas.size() <= 12
+          && request.resource.data.mentoringTopics is list
+          && request.resource.data.mentoringTopics.size() <= 12
+          && request.resource.data.availability is string
+          && request.resource.data.biography is string
+          && request.resource.data.biography.size() <= 2000
+          && request.resource.data.status == "active"
+          && request.resource.data.updatedAt == request.time;
+      }
+
+      allow read: if resource.data.status == "active" || isAdmin();
+      allow create, update: if signedIn()
+        && request.auth.uid == mentorId
+        && validMentorProfile();
+      allow delete: if isAdmin();
+    }
+
+    match /mentorships/{mentorshipId} {
+      function mentorshipParticipant() {
+        return signedIn()
+          && request.auth.uid in [resource.data.studentId, resource.data.mentorId];
+      }
+
+      allow create: if signedIn()
+        && roleIs("student")
+        && request.resource.data.keys().hasOnly([
+          "id", "studentId", "mentorId", "studentName", "mentorName",
+          "message", "focusAreas", "status", "chatId", "respondedAt",
+          "completedAt", "createdAt", "updatedAt"
+        ])
+        && request.resource.data.id == mentorshipId
+        && request.resource.data.studentId == request.auth.uid
+        && get(/databases/$(database)/documents/users/$(request.resource.data.mentorId)).data.role == "mentor"
+        && exists(/databases/$(database)/documents/mentorProfiles/$(request.resource.data.mentorId))
+        && request.resource.data.message is string
+        && request.resource.data.message.size() >= 20
+        && request.resource.data.message.size() <= 1500
+        && request.resource.data.focusAreas is list
+        && request.resource.data.focusAreas.size() >= 1
+        && request.resource.data.focusAreas.size() <= 5
+        && request.resource.data.status == "pending"
+        && request.resource.data.chatId == null
+        && request.resource.data.respondedAt == null
+        && request.resource.data.completedAt == null
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+
+      allow read: if mentorshipParticipant() || isAdmin();
+      allow update: if signedIn() && (
+        (
+          resource.data.mentorId == request.auth.uid
+          && (
+            (
+              resource.data.status == "pending"
+              && request.resource.data.status in ["active", "rejected"]
+              && request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(["status", "chatId", "respondedAt", "updatedAt"])
+              && request.resource.data.respondedAt == request.time
+              && request.resource.data.updatedAt == request.time
+              && (
+                (request.resource.data.status == "active"
+                  && request.resource.data.chatId == "mentorship__" + mentorshipId)
+                || (request.resource.data.status == "rejected"
+                  && request.resource.data.chatId == null)
+              )
+            )
+            || (
+              resource.data.status == "active"
+              && request.resource.data.status == "completed"
+              && request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(["status", "completedAt", "updatedAt"])
+              && request.resource.data.completedAt == request.time
+              && request.resource.data.updatedAt == request.time
+            )
+          )
+        )
+        || (
+          isAdmin()
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly([
+              "status", "chatId", "respondedAt", "completedAt", "updatedAt"
+            ])
+          && request.resource.data.status in ["active", "completed", "cancelled"]
+          && request.resource.data.updatedAt == request.time
+          && (
+            request.resource.data.status != "active"
+            || (
+              request.resource.data.chatId == "mentorship__" + mentorshipId
+              && request.resource.data.respondedAt == request.time
+            )
+          )
+        )
+      );
+      allow delete: if false;
+    }
+
+    match /mentorNotes/{noteId} {
+      function mentorship() {
+        return get(/databases/$(database)/documents/mentorships/$(resource.data.mentorshipId));
+      }
+
+      allow read: if signedIn()
+        && (resource.data.mentorId == request.auth.uid || isAdmin());
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          "id", "mentorshipId", "mentorId", "studentId", "content",
+          "createdAt", "updatedAt"
+        ])
+        && request.resource.data.id == noteId
+        && request.resource.data.mentorId == request.auth.uid
+        && get(/databases/$(database)/documents/mentorships/$(request.resource.data.mentorshipId)).data.mentorId == request.auth.uid
+        && get(/databases/$(database)/documents/mentorships/$(request.resource.data.mentorshipId)).data.studentId == request.resource.data.studentId
+        && get(/databases/$(database)/documents/mentorships/$(request.resource.data.mentorshipId)).data.status == "active"
+        && request.resource.data.content is string
+        && request.resource.data.content.size() >= 3
+        && request.resource.data.content.size() <= 3000
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if signedIn()
+        && resource.data.mentorId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(["content", "updatedAt"])
+        && request.resource.data.content is string
+        && request.resource.data.content.size() >= 3
+        && request.resource.data.content.size() <= 3000
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if signedIn()
+        && (resource.data.mentorId == request.auth.uid || isAdmin());
+    }
+
+    match /mentorEvaluations/{evaluationId} {
+      allow read: if signedIn()
+        && (
+          request.auth.uid in [resource.data.mentorId, resource.data.studentId]
+          || isAdmin()
+        );
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          "id", "mentorshipId", "mentorId", "studentId", "progress",
+          "summary", "nextSteps", "createdAt"
+        ])
+        && request.resource.data.id == evaluationId
+        && request.resource.data.mentorId == request.auth.uid
+        && get(/databases/$(database)/documents/mentorships/$(request.resource.data.mentorshipId)).data.mentorId == request.auth.uid
+        && get(/databases/$(database)/documents/mentorships/$(request.resource.data.mentorshipId)).data.studentId == request.resource.data.studentId
+        && get(/databases/$(database)/documents/mentorships/$(request.resource.data.mentorshipId)).data.status == "active"
+        && request.resource.data.progress is int
+        && request.resource.data.progress >= 1
+        && request.resource.data.progress <= 5
+        && request.resource.data.summary is string
+        && request.resource.data.summary.size() >= 10
+        && request.resource.data.summary.size() <= 2000
+        && request.resource.data.nextSteps is string
+        && request.resource.data.nextSteps.size() >= 5
+        && request.resource.data.nextSteps.size() <= 1500
+        && request.resource.data.createdAt == request.time;
+      allow update, delete: if false;
+    }
+
     match /ideas/{ideaId} {
       function isOwner() {
         return signedIn() && resource.data.studentId == request.auth.uid;
@@ -124,14 +445,32 @@ service cloud.firestore {
       function validOwnerCreate() {
         return signedIn()
           && roleIs("student")
+          && request.resource.data.keys().hasOnly([
+            "id", "studentId", "title", "slug", "shortDescription",
+            "description", "problem", "solution", "targetAudience",
+            "categoryId", "city", "stage", "supportNeeds", "visibility",
+            "status", "adminNote", "rejectionReason", "revisionNote",
+            "isFeatured", "viewCount", "supportCount", "likeCount",
+            "commentCount", "coverImageUrl", "attachmentUrls",
+            "prototypeUrl", "githubUrl", "websiteUrl", "publishedAt",
+            "moderatedBy", "moderatedAt", "createdAt", "updatedAt"
+          ])
           && request.resource.data.id == ideaId
           && request.resource.data.studentId == request.auth.uid
           && request.resource.data.status in ["draft", "pending"]
+          && request.resource.data.isFeatured == false
+          && request.resource.data.viewCount == 0
           && request.resource.data.likeCount == 0
           && request.resource.data.supportCount == 0
           && request.resource.data.commentCount == 0
+          && request.resource.data.adminNote == ""
+          && request.resource.data.rejectionReason == null
+          && request.resource.data.revisionNote == null
+          && request.resource.data.publishedAt == null
           && request.resource.data.moderatedBy == null
-          && request.resource.data.moderatedAt == null;
+          && request.resource.data.moderatedAt == null
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
       }
 
       function ownerEdit() {
@@ -200,8 +539,17 @@ service cloud.firestore {
         && request.resource.data.id == requestId
         && request.resource.data.supporterId == request.auth.uid
         && request.resource.data.status == "pending"
+        && request.resource.data.message is string
+        && request.resource.data.message.size() >= 20
+        && request.resource.data.message.size() <= 1500
+        && request.resource.data.supportTypes is list
+        && request.resource.data.supportTypes.size() >= 1
+        && request.resource.data.supportTypes.size() <= 4
+        && request.resource.data.adminNote == ""
         && request.resource.data.reviewedBy == null
         && request.resource.data.reviewedAt == null
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
         && get(/databases/$(database)/documents/ideas/$(request.resource.data.ideaId)).data.status == "approved"
         && get(/databases/$(database)/documents/ideas/$(request.resource.data.ideaId)).data.studentId != request.auth.uid;
 
@@ -227,11 +575,26 @@ service cloud.firestore {
       allow create: if signedIn()
         && request.resource.data.keys().hasOnly([
           "id", "ideaId", "userId", "userName", "userRole", "content",
-          "createdAt", "updatedAt", "status"
+          "userAvatarUrl", "createdAt", "updatedAt", "status"
         ])
         && request.resource.data.id == commentId
         && request.resource.data.userId == request.auth.uid
         && request.resource.data.userRole == currentUser().data.role
+        && request.resource.data.content is string
+        && request.resource.data.content.size() >= 2
+        && request.resource.data.content.size() <= 1000
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && (
+          (
+            !currentUser().data.keys().hasAny(["avatarUrl"])
+            && request.resource.data.userAvatarUrl == null
+          )
+          || (
+            currentUser().data.keys().hasAny(["avatarUrl"])
+            && request.resource.data.userAvatarUrl == currentUser().data.avatarUrl
+          )
+        )
         && request.resource.data.status == "active"
         && get(/databases/$(database)/documents/ideas/$(request.resource.data.ideaId)).data.status == "approved";
       allow update: if signedIn() && (
@@ -240,12 +603,17 @@ service cloud.firestore {
           && resource.data.status == "active"
           && request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(["content", "updatedAt"])
+          && request.resource.data.content is string
+          && request.resource.data.content.size() >= 2
+          && request.resource.data.content.size() <= 1000
+          && request.resource.data.updatedAt == request.time
         )
         || (
           isAdmin()
           && request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(["status", "updatedAt"])
           && request.resource.data.status == "hidden"
+          && request.resource.data.updatedAt == request.time
         )
       );
       allow delete: if signedIn()
@@ -342,12 +710,29 @@ service cloud.firestore {
       }
 
       allow read: if participant() || isAdmin();
-      allow create: if isAdmin()
+      allow create: if (
+        isAdmin()
         && request.resource.data.id == chatId
         && request.resource.data.participantIds.size() == 2
         && request.resource.data.ownerId in request.resource.data.participantIds
         && request.resource.data.supporterId in request.resource.data.participantIds
-        && getAfter(/databases/$(database)/documents/supportRequests/$(request.resource.data.supportRequestId)).data.status == "approved";
+        && getAfter(/databases/$(database)/documents/supportRequests/$(request.resource.data.supportRequestId)).data.status == "approved"
+      ) || (
+        signedIn()
+        && (roleIs("mentor") || isAdmin())
+        && request.resource.data.id == chatId
+        && request.resource.data.mentorshipId is string
+        && chatId == "mentorship__" + request.resource.data.mentorshipId
+        && getAfter(/databases/$(database)/documents/mentorships/$(request.resource.data.mentorshipId)).data.status == "active"
+        && (
+          getAfter(/databases/$(database)/documents/mentorships/$(request.resource.data.mentorshipId)).data.mentorId == request.auth.uid
+          || isAdmin()
+        )
+        && request.resource.data.participantIds == [
+          getAfter(/databases/$(database)/documents/mentorships/$(request.resource.data.mentorshipId)).data.studentId,
+          request.auth.uid
+        ]
+      );
       allow update: if participant()
         && request.resource.data.participantIds == resource.data.participantIds
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([

@@ -256,18 +256,6 @@ export function ProfileForm() {
     async (values) => {
       if (!user) return;
 
-      if (process.env.NODE_ENV === "development") {
-        console.info("[profile-submit] valid submit:", {
-          role: values.role,
-          supporterTypePresent:
-            values.role === "supporter" && Boolean(values.supporterType),
-          expertiseAreaCount:
-            values.role === "student" ? 0 : values.expertiseAreas.length,
-          supportTypeCount:
-            values.role === "supporter" ? values.supportTypes.length : 0,
-        });
-      }
-
       setFeedback(null);
       const result = await updateUserProfile(user.id, {
         ...values,
@@ -345,7 +333,8 @@ export function ProfileForm() {
     (validationErrors) => {
       const visibleErrors = visibleValidationErrors(validationErrors);
       if (process.env.NODE_ENV === "development") {
-        console.warn("[profile-submit] validation blocked submit:",
+        console.warn(
+          "[profile-submit] validation blocked submit:",
           visibleErrors.map((error) => ({
             field: error.field,
             message: error.message,
@@ -560,23 +549,28 @@ export function ProfileForm() {
           </div>
         </div>
 
-        {role !== "mentor" && <div className="mt-5">
-          <label htmlFor="bio" className="text-sm font-semibold text-slate-800">
-            Kısa biyografi
-          </label>
-          <Textarea
-            id="bio"
-            className="mt-2"
-            aria-invalid={Boolean(errors.bio)}
-            aria-describedby={errors.bio ? "profile-bio-error" : undefined}
-            {...register("bio")}
-          />
-          {errors.bio && (
-            <p id="profile-bio-error" className="mt-1 text-sm text-red-700">
-              {errors.bio.message}
-            </p>
-          )}
-        </div>}
+        {role !== "mentor" && (
+          <div className="mt-5">
+            <label
+              htmlFor="bio"
+              className="text-sm font-semibold text-slate-800"
+            >
+              Kısa biyografi
+            </label>
+            <Textarea
+              id="bio"
+              className="mt-2"
+              aria-invalid={Boolean(errors.bio)}
+              aria-describedby={errors.bio ? "profile-bio-error" : undefined}
+              {...register("bio")}
+            />
+            {errors.bio && (
+              <p id="profile-bio-error" className="mt-1 text-sm text-red-700">
+                {errors.bio.message}
+              </p>
+            )}
+          </div>
+        )}
 
         {role === "student" && (
           <section className="mt-8 border-t border-slate-200 pt-6">
@@ -761,148 +755,203 @@ export function ProfileForm() {
               {role === "mentor" && (
                 <>
                   <div>
-                    <label htmlFor="profession" className="text-sm font-semibold text-slate-800">
+                    <label
+                      htmlFor="profession"
+                      className="text-sm font-semibold text-slate-800"
+                    >
                       Meslek
                     </label>
-                    <Input id="profession" className="mt-2" {...register("profession")} />
-                    {errors.profession && <p className="mt-1 text-sm text-red-700">{errors.profession.message}</p>}
+                    <Input
+                      id="profession"
+                      className="mt-2"
+                      {...register("profession")}
+                    />
+                    {errors.profession && (
+                      <p className="mt-1 text-sm text-red-700">
+                        {errors.profession.message}
+                      </p>
+                    )}
                   </div>
                   <div>
-                    <label htmlFor="organization" className="text-sm font-semibold text-slate-800">
+                    <label
+                      htmlFor="organization"
+                      className="text-sm font-semibold text-slate-800"
+                    >
                       Çalıştığı kurum
                     </label>
-                    <Input id="organization" className="mt-2" {...register("organization")} />
+                    <Input
+                      id="organization"
+                      className="mt-2"
+                      {...register("organization")}
+                    />
                   </div>
                   <div>
-                    <label htmlFor="experienceYears" className="text-sm font-semibold text-slate-800">
+                    <label
+                      htmlFor="experienceYears"
+                      className="text-sm font-semibold text-slate-800"
+                    >
                       Deneyim yılı
                     </label>
-                    <Input id="experienceYears" type="number" min={0} max={60} className="mt-2" {...register("experienceYears")} />
-                    {errors.experienceYears && <p className="mt-1 text-sm text-red-700">{errors.experienceYears.message}</p>}
+                    <Input
+                      id="experienceYears"
+                      type="number"
+                      min={0}
+                      max={60}
+                      className="mt-2"
+                      {...register("experienceYears")}
+                    />
+                    {errors.experienceYears && (
+                      <p className="mt-1 text-sm text-red-700">
+                        {errors.experienceYears.message}
+                      </p>
+                    )}
                   </div>
                   <div>
-                    <label htmlFor="availability" className="text-sm font-semibold text-slate-800">
+                    <label
+                      htmlFor="availability"
+                      className="text-sm font-semibold text-slate-800"
+                    >
                       Uygunluk durumu
                     </label>
-                    <Select id="availability" className="mt-2" {...register("availability")}>
-                      {MENTOR_AVAILABILITY_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+                    <Select
+                      id="availability"
+                      className="mt-2"
+                      {...register("availability")}
+                    >
+                      {MENTOR_AVAILABILITY_OPTIONS.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
                     </Select>
                   </div>
                 </>
               )}
-              {role === "supporter" && <>
-              <div>
-                <label
-                  htmlFor="title"
-                  className="text-sm font-semibold text-slate-800"
-                >
-                  Ünvan
-                </label>
-                <Input
-                  id="title"
-                  className="mt-2"
-                  aria-invalid={Boolean(errors.title)}
-                  aria-describedby={errors.title ? "title-error" : undefined}
-                  {...register("title")}
-                />
-                {errors.title && (
-                  <p id="title-error" className="mt-1 text-sm text-red-700">
-                    {errors.title.message}
-                  </p>
-                )}
-              </div>
-              <div>
-                <label
-                  htmlFor="website"
-                  className="text-sm font-semibold text-slate-800"
-                >
-                  Website
-                </label>
-                <Input
-                  id="website"
-                  type="url"
-                  className="mt-2"
-                  aria-invalid={Boolean(errors.website)}
-                  aria-describedby={
-                    errors.website ? "website-error" : undefined
-                  }
-                  {...register("website")}
-                />
-                {errors.website && (
-                  <p id="website-error" className="mt-1 text-sm text-red-700">
-                    {errors.website.message}
-                  </p>
-                )}
-              </div>
-              <div>
-                <label
-                  htmlFor="linkedin"
-                  className="text-sm font-semibold text-slate-800"
-                >
-                  LinkedIn
-                </label>
-                <Input
-                  id="linkedin"
-                  type="url"
-                  className="mt-2"
-                  aria-invalid={Boolean(errors.linkedin)}
-                  aria-describedby={
-                    errors.linkedin ? "linkedin-error" : undefined
-                  }
-                  {...register("linkedin")}
-                />
-                {errors.linkedin && (
-                  <p id="linkedin-error" className="mt-1 text-sm text-red-700">
-                    {errors.linkedin.message}
-                  </p>
-                )}
-              </div>
-              </>}
+              {role === "supporter" && (
+                <>
+                  <div>
+                    <label
+                      htmlFor="title"
+                      className="text-sm font-semibold text-slate-800"
+                    >
+                      Ünvan
+                    </label>
+                    <Input
+                      id="title"
+                      className="mt-2"
+                      aria-invalid={Boolean(errors.title)}
+                      aria-describedby={
+                        errors.title ? "title-error" : undefined
+                      }
+                      {...register("title")}
+                    />
+                    {errors.title && (
+                      <p id="title-error" className="mt-1 text-sm text-red-700">
+                        {errors.title.message}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="website"
+                      className="text-sm font-semibold text-slate-800"
+                    >
+                      Website
+                    </label>
+                    <Input
+                      id="website"
+                      type="url"
+                      className="mt-2"
+                      aria-invalid={Boolean(errors.website)}
+                      aria-describedby={
+                        errors.website ? "website-error" : undefined
+                      }
+                      {...register("website")}
+                    />
+                    {errors.website && (
+                      <p
+                        id="website-error"
+                        className="mt-1 text-sm text-red-700"
+                      >
+                        {errors.website.message}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="linkedin"
+                      className="text-sm font-semibold text-slate-800"
+                    >
+                      LinkedIn
+                    </label>
+                    <Input
+                      id="linkedin"
+                      type="url"
+                      className="mt-2"
+                      aria-invalid={Boolean(errors.linkedin)}
+                      aria-describedby={
+                        errors.linkedin ? "linkedin-error" : undefined
+                      }
+                      {...register("linkedin")}
+                    />
+                    {errors.linkedin && (
+                      <p
+                        id="linkedin-error"
+                        className="mt-1 text-sm text-red-700"
+                      >
+                        {errors.linkedin.message}
+                      </p>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
 
-            {role === "supporter" && <div className="mt-5">
-              <label
-                htmlFor="expertiseAreas"
-                className="text-sm font-semibold text-slate-800"
-              >
-                Uzmanlık alanları
-              </label>
-              <Controller
-                name="expertiseAreas"
-                control={control}
-                render={({ field }) => (
-                  <Textarea
-                    id="expertiseAreas"
-                    className="mt-2 min-h-24"
-                    placeholder="Her satıra bir uzmanlık alanı yazın"
-                    aria-invalid={Boolean(errors.expertiseAreas)}
-                    aria-describedby={
-                      errors.expertiseAreas
-                        ? "expertise-areas-error"
-                        : undefined
-                    }
-                    value={(field.value ?? []).join("\n")}
-                    onBlur={field.onBlur}
-                    onChange={(event) =>
-                      field.onChange(
-                        event.target.value
-                          .split(/[\n,]/)
-                          .map((value) => value.trim())
-                          .filter(Boolean),
-                      )
-                    }
-                  />
-                )}
-              />
-              {errors.expertiseAreas && (
-                <p
-                  id="expertise-areas-error"
-                  className="mt-1 text-sm text-red-700"
+            {role === "supporter" && (
+              <div className="mt-5">
+                <label
+                  htmlFor="expertiseAreas"
+                  className="text-sm font-semibold text-slate-800"
                 >
-                  {errors.expertiseAreas.message}
-                </p>
-              )}
-            </div>}
+                  Uzmanlık alanları
+                </label>
+                <Controller
+                  name="expertiseAreas"
+                  control={control}
+                  render={({ field }) => (
+                    <Textarea
+                      id="expertiseAreas"
+                      className="mt-2 min-h-24"
+                      placeholder="Her satıra bir uzmanlık alanı yazın"
+                      aria-invalid={Boolean(errors.expertiseAreas)}
+                      aria-describedby={
+                        errors.expertiseAreas
+                          ? "expertise-areas-error"
+                          : undefined
+                      }
+                      value={(field.value ?? []).join("\n")}
+                      onBlur={field.onBlur}
+                      onChange={(event) =>
+                        field.onChange(
+                          event.target.value
+                            .split(/[\n,]/)
+                            .map((value) => value.trim())
+                            .filter(Boolean),
+                        )
+                      }
+                    />
+                  )}
+                />
+                {errors.expertiseAreas && (
+                  <p
+                    id="expertise-areas-error"
+                    className="mt-1 text-sm text-red-700"
+                  >
+                    {errors.expertiseAreas.message}
+                  </p>
+                )}
+              </div>
+            )}
 
             {role === "supporter" && (
               <fieldset className="mt-5">
@@ -936,47 +985,116 @@ export function ProfileForm() {
             {role === "mentor" && (
               <div className="mt-6 grid gap-6">
                 <fieldset>
-                  <legend className="text-sm font-semibold text-slate-800">Uzmanlık alanları</legend>
+                  <legend className="text-sm font-semibold text-slate-800">
+                    Uzmanlık alanları
+                  </legend>
                   <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                     {MENTOR_EXPERTISE_AREAS.map((area) => (
-                      <label key={area} className="flex items-center gap-2 rounded-lg border border-slate-200 p-3 text-sm">
-                        <input type="checkbox" value={area} className="size-4" {...register("expertiseAreas")} />
+                      <label
+                        key={area}
+                        className="flex items-center gap-2 rounded-lg border border-slate-200 p-3 text-sm"
+                      >
+                        <input
+                          type="checkbox"
+                          value={area}
+                          className="size-4"
+                          {...register("expertiseAreas")}
+                        />
                         {area}
                       </label>
                     ))}
                   </div>
-                  {errors.expertiseAreas && <p className="mt-2 text-sm text-red-700" role="alert">{errors.expertiseAreas.message}</p>}
+                  {errors.expertiseAreas && (
+                    <p className="mt-2 text-sm text-red-700" role="alert">
+                      {errors.expertiseAreas.message}
+                    </p>
+                  )}
                 </fieldset>
 
                 <div>
-                  <label htmlFor="biography" className="text-sm font-semibold text-slate-800">Kısa biyografi</label>
-                  <Textarea id="biography" className="mt-2 min-h-32" {...register("biography")} />
-                  {errors.biography && <p className="mt-2 text-sm text-red-700" role="alert">{errors.biography.message}</p>}
+                  <label
+                    htmlFor="biography"
+                    className="text-sm font-semibold text-slate-800"
+                  >
+                    Kısa biyografi
+                  </label>
+                  <Textarea
+                    id="biography"
+                    className="mt-2 min-h-32"
+                    {...register("biography")}
+                  />
+                  {errors.biography && (
+                    <p className="mt-2 text-sm text-red-700" role="alert">
+                      {errors.biography.message}
+                    </p>
+                  )}
                 </div>
 
                 <fieldset>
-                  <legend className="text-sm font-semibold text-slate-800">Mentorluk verebileceği konular</legend>
+                  <legend className="text-sm font-semibold text-slate-800">
+                    Mentorluk verebileceği konular
+                  </legend>
                   <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                     {MENTORING_TOPICS.map((topic) => (
-                      <label key={topic} className="flex items-center gap-2 rounded-lg border border-slate-200 p-3 text-sm">
-                        <input type="checkbox" value={topic} className="size-4" {...register("mentoringTopics")} />
+                      <label
+                        key={topic}
+                        className="flex items-center gap-2 rounded-lg border border-slate-200 p-3 text-sm"
+                      >
+                        <input
+                          type="checkbox"
+                          value={topic}
+                          className="size-4"
+                          {...register("mentoringTopics")}
+                        />
                         {topic}
                       </label>
                     ))}
                   </div>
-                  {errors.mentoringTopics && <p className="mt-2 text-sm text-red-700" role="alert">{errors.mentoringTopics.message}</p>}
+                  {errors.mentoringTopics && (
+                    <p className="mt-2 text-sm text-red-700" role="alert">
+                      {errors.mentoringTopics.message}
+                    </p>
+                  )}
                 </fieldset>
 
                 <div className="grid gap-5 sm:grid-cols-2">
                   <div>
-                    <label htmlFor="linkedinUrl" className="text-sm font-semibold text-slate-800">LinkedIn adresi</label>
-                    <Input id="linkedinUrl" type="url" className="mt-2" {...register("linkedinUrl")} />
-                    {errors.linkedinUrl && <p className="mt-1 text-sm text-red-700">{errors.linkedinUrl.message}</p>}
+                    <label
+                      htmlFor="linkedinUrl"
+                      className="text-sm font-semibold text-slate-800"
+                    >
+                      LinkedIn adresi
+                    </label>
+                    <Input
+                      id="linkedinUrl"
+                      type="url"
+                      className="mt-2"
+                      {...register("linkedinUrl")}
+                    />
+                    {errors.linkedinUrl && (
+                      <p className="mt-1 text-sm text-red-700">
+                        {errors.linkedinUrl.message}
+                      </p>
+                    )}
                   </div>
                   <div>
-                    <label htmlFor="websiteUrl" className="text-sm font-semibold text-slate-800">Web sitesi</label>
-                    <Input id="websiteUrl" type="url" className="mt-2" {...register("websiteUrl")} />
-                    {errors.websiteUrl && <p className="mt-1 text-sm text-red-700">{errors.websiteUrl.message}</p>}
+                    <label
+                      htmlFor="websiteUrl"
+                      className="text-sm font-semibold text-slate-800"
+                    >
+                      Web sitesi
+                    </label>
+                    <Input
+                      id="websiteUrl"
+                      type="url"
+                      className="mt-2"
+                      {...register("websiteUrl")}
+                    />
+                    {errors.websiteUrl && (
+                      <p className="mt-1 text-sm text-red-700">
+                        {errors.websiteUrl.message}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>

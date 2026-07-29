@@ -10,6 +10,8 @@ import { auth } from "@/lib/firebase/auth";
 import { db } from "@/lib/firebase/firestore";
 import { getFirebaseErrorMessage } from "@/lib/firebase/firebase-error";
 import { commentContentSchema } from "@/lib/validations/comment-schema";
+import { LEADERBOARD_POINTS } from "@/constants/leaderboard";
+import { applyScoreInTransaction } from "@/services/leaderboard-service";
 import { createNotification } from "@/services/notification-service";
 import { COMMENT_STATUSES, type IdeaComment } from "@/types/comment";
 import {
@@ -53,6 +55,7 @@ const commentDocumentSchema = z.object({
   ideaId: z.string().min(1),
   userId: z.string().min(1),
   userName: z.string(),
+  userAvatarUrl: z.string().nullable().optional().default(null),
   userRole: z.enum(USER_ROLES),
   content: commentContentSchema,
   createdAt: timestampSchema,
@@ -151,6 +154,7 @@ export async function createIdeaComment(
 
     const name: unknown = profile.data().name;
     const surname: unknown = profile.data().surname;
+    const avatarUrl: unknown = profile.data().avatarUrl;
     const userName =
       [name, surname]
         .filter(
@@ -164,16 +168,37 @@ export async function createIdeaComment(
     const reference = doc(collection(db, "comments"));
     const now = new Date().toISOString();
 
-    await setDoc(reference, {
-      id: reference.id,
-      ideaId,
-      userId,
-      userName,
-      userRole: role,
-      content: validation.data,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-      status: "active",
+    await runTransaction(db, async (transaction) => {
+      const [transactionProfile, transactionIdea] = await Promise.all([
+        transaction.get(doc(db, "users", userId)),
+        transaction.get(doc(db, "ideas", ideaId)),
+      ]);
+      if (
+        !transactionProfile.exists() ||
+        !transactionIdea.exists() ||
+        transactionIdea.data().status !== "approved"
+      ) {
+        throw new Error("comment/not-available");
+      }
+      transaction.set(reference, {
+        id: reference.id,
+        ideaId,
+        userId,
+        userName,
+        userAvatarUrl: typeof avatarUrl === "string" ? avatarUrl : null,
+        userRole: role,
+        content: validation.data,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        status: "active",
+      });
+      applyScoreInTransaction(
+        transaction,
+        transactionProfile,
+        "comment",
+        reference.id,
+        LEADERBOARD_POINTS.commentCreated,
+      );
     });
 
     const ideaOwnerId: unknown = idea.data().studentId;
@@ -205,6 +230,7 @@ export async function createIdeaComment(
         ideaId,
         userId,
         userName,
+        userAvatarUrl: typeof avatarUrl === "string" ? avatarUrl : null,
         userRole: role,
         content: validation.data,
         createdAt: now,

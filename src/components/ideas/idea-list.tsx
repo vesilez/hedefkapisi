@@ -24,6 +24,7 @@ export function IdeaList({
 }) {
   const [ideas, setIdeas] = useState<IdeaListItem[]>([]);
   const [filters, setFilters] = useState<IdeaFilterValues>(initialFilters);
+  const [searchInput, setSearchInput] = useState(initialFilters.search);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
@@ -61,7 +62,7 @@ export function IdeaList({
     return filterAndSortIdeas(ideas, filters);
   }, [filters, ideas]);
 
-  function updateFilters(nextFilters: IdeaFilterValues) {
+  function commitFilters(nextFilters: IdeaFilterValues) {
     setFilters(nextFilters);
     const query = ideaFiltersToQuery(nextFilters);
     window.history.replaceState(
@@ -69,6 +70,36 @@ export function IdeaList({
       "",
       query ? `/hayaller?${query}` : "/hayaller",
     );
+  }
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setFilters((currentFilters) => {
+        if (currentFilters.search === searchInput) return currentFilters;
+        const nextFilters = { ...currentFilters, search: searchInput };
+        const query = ideaFiltersToQuery(nextFilters);
+        window.history.replaceState(
+          null,
+          "",
+          query ? `/hayaller?${query}` : "/hayaller",
+        );
+        return nextFilters;
+      });
+    }, 350);
+
+    return () => window.clearTimeout(timeout);
+  }, [searchInput]);
+
+  function updateFilterInputs(nextFilters: IdeaFilterValues) {
+    if (nextFilters.search !== searchInput) {
+      setSearchInput(nextFilters.search);
+    }
+    commitFilters({ ...nextFilters, search: filters.search });
+  }
+
+  function clearFilters() {
+    setSearchInput("");
+    commitFilters(EMPTY_IDEA_FILTERS);
   }
 
   if (loading) {
@@ -122,9 +153,9 @@ export function IdeaList({
   return (
     <div>
       <IdeaFilters
-        values={filters}
-        onChange={updateFilters}
-        onClear={() => updateFilters(EMPTY_IDEA_FILTERS)}
+        values={{ ...filters, search: searchInput }}
+        onChange={updateFilterInputs}
+        onClear={clearFilters}
       />
       <p className="mt-5 text-sm text-slate-600" aria-live="polite">
         {filteredIdeas.length} hayal bulundu.

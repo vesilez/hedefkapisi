@@ -12,6 +12,8 @@ import {
   notifyAllAdmins,
 } from "@/services/notification-service";
 import { grantAchievementInTransaction } from "@/services/achievement-service";
+import { LEADERBOARD_POINTS } from "@/constants/leaderboard";
+import { applyScoreInTransaction } from "@/services/leaderboard-service";
 import type {
   CreateSupportRequestInput,
   SupportRequest,
@@ -28,7 +30,6 @@ import {
   query,
   runTransaction,
   serverTimestamp,
-  setDoc,
   where,
 } from "firebase/firestore";
 import { z } from "zod";
@@ -202,18 +203,38 @@ export async function createSupportRequest(
     }
 
     const reference = doc(collection(db, "supportRequests"));
-    await setDoc(reference, {
-      id: reference.id,
-      ideaId: validation.data.ideaId,
-      supporterId,
-      supportTypes: validation.data.supportTypes,
-      message: validation.data.message,
-      status: "pending",
-      adminNote: "",
-      reviewedBy: null,
-      reviewedAt: null,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
+    await runTransaction(db, async (transaction) => {
+      const [transactionProfile, transactionIdea] = await Promise.all([
+        transaction.get(doc(db, "users", supporterId)),
+        transaction.get(doc(db, "ideas", validation.data.ideaId)),
+      ]);
+      if (
+        !transactionProfile.exists() ||
+        !transactionIdea.exists() ||
+        transactionIdea.data().status !== "approved"
+      ) {
+        throw new Error("support-request/not-available");
+      }
+      transaction.set(reference, {
+        id: reference.id,
+        ideaId: validation.data.ideaId,
+        supporterId,
+        supportTypes: validation.data.supportTypes,
+        message: validation.data.message,
+        status: "pending",
+        adminNote: "",
+        reviewedBy: null,
+        reviewedAt: null,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      applyScoreInTransaction(
+        transaction,
+        transactionProfile,
+        "support",
+        reference.id,
+        LEADERBOARD_POINTS.supportGiven,
+      );
     });
 
     const ideaOwnerId: unknown = idea.data().studentId;
@@ -298,16 +319,6 @@ export async function getPendingSupportRequests(): Promise<
         limit(50),
       ),
     );
-    if (process.env.NODE_ENV === "development") {
-      console.info("[support-requests] pending documents:", snapshots.size);
-      for (const snapshot of snapshots.docs) {
-        const status: unknown = snapshot.data().status;
-        console.info("[support-requests] document:", {
-          id: snapshot.id,
-          status: typeof status === "string" ? status : "invalid",
-        });
-      }
-    }
     return parseRequests(snapshots);
   } catch (error: unknown) {
     return failure(error);
@@ -470,11 +481,19 @@ async function reviewSupportRequest(
               },
             });
           }
-          grantAchievementInTransaction(
+          const achievementGranted = grantAchievementInTransaction(
             transaction,
             supporterId,
             supporterSnapshot.data(),
             "first_support",
+          );
+          applyScoreInTransaction(
+            transaction,
+            supporterSnapshot,
+            "completed_support",
+            requestId,
+            LEADERBOARD_POINTS.supportCompleted,
+            achievementGranted ? 1 : 0,
           );
         }
 

@@ -6,7 +6,11 @@ import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Textarea } from "@/components/ui/textarea";
-import { isAdminRole, USER_ROLE_LABELS, type UserRole } from "@/constants/roles";
+import {
+  isAdminRole,
+  USER_ROLE_LABELS,
+  type UserRole,
+} from "@/constants/roles";
 import { useAuth } from "@/hooks/use-auth";
 import {
   createIdeaComment,
@@ -30,6 +34,7 @@ import { useEffect, useState } from "react";
 
 interface IdeaCommentsProps {
   ideaId: string;
+  onCountChange?: (count: number) => void;
 }
 
 interface Feedback {
@@ -37,7 +42,7 @@ interface Feedback {
   message: string;
 }
 
-export function IdeaComments({ ideaId }: IdeaCommentsProps) {
+export function IdeaComments({ ideaId, onCountChange }: IdeaCommentsProps) {
   const { user, loading: authLoading } = useAuth();
   const [viewerRole, setViewerRole] = useState<UserRole | null>(null);
   const [comments, setComments] = useState<IdeaComment[]>([]);
@@ -45,6 +50,8 @@ export function IdeaComments({ ideaId }: IdeaCommentsProps) {
   const [content, setContent] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
+  const [commentsError, setCommentsError] = useState<string | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
     if (authLoading || !user) return;
@@ -63,15 +70,14 @@ export function IdeaComments({ ideaId }: IdeaCommentsProps) {
     return subscribeToIdeaComments(ideaId, viewerRole, (result) => {
       if (result.success) {
         setComments(result.data);
-        setFeedback((current) =>
-          current?.type === "error" ? null : current,
-        );
+        setCommentsError(null);
+        onCountChange?.(result.data.length);
       } else {
-        setFeedback({ type: "error", message: result.error.message });
+        setCommentsError(result.error.message);
       }
       setCommentsLoading(false);
     });
-  }, [ideaId, viewerRole]);
+  }, [ideaId, onCountChange, retryKey, viewerRole]);
 
   async function submitComment() {
     if (!user || submitting) return;
@@ -80,10 +86,14 @@ export function IdeaComments({ ideaId }: IdeaCommentsProps) {
     setFeedback(null);
     const result = await createIdeaComment(ideaId, content);
     if (result.success) {
-      setComments((current) => [
-        result.data,
-        ...current.filter((comment) => comment.id !== result.data.id),
-      ]);
+      setComments((current) => {
+        const nextComments = [
+          result.data,
+          ...current.filter((comment) => comment.id !== result.data.id),
+        ];
+        onCountChange?.(nextComments.length);
+        return nextComments;
+      });
       setContent("");
       setFeedback({ type: "success", message: "Yorumunuz eklendi." });
     } else {
@@ -97,14 +107,17 @@ export function IdeaComments({ ideaId }: IdeaCommentsProps) {
       <Card className="overflow-hidden border-slate-200 shadow-md sm:p-8">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-          <span className="flex size-11 items-center justify-center rounded-xl bg-blue-100 text-blue-700">
-            <MessageCircle aria-hidden="true" className="size-5.5" />
-          </span>
-          <div>
-            <h2 id="comments-title" className="text-2xl font-bold text-slate-950 sm:text-3xl">
-              Yorumlar
-            </h2>
-          </div>
+            <span className="flex size-11 items-center justify-center rounded-xl bg-blue-100 text-blue-700">
+              <MessageCircle aria-hidden="true" className="size-5.5" />
+            </span>
+            <div>
+              <h2
+                id="comments-title"
+                className="text-2xl font-bold text-slate-950 sm:text-3xl"
+              >
+                Yorumlar
+              </h2>
+            </div>
           </div>
           <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-bold text-slate-700">
             {comments.length} yorum
@@ -181,6 +194,26 @@ export function IdeaComments({ ideaId }: IdeaCommentsProps) {
             <div className="flex min-h-32 items-center justify-center">
               <LoadingSpinner label="Yorumlar yükleniyor..." />
             </div>
+          ) : commentsError ? (
+            <div
+              className="rounded-2xl border border-red-200 bg-red-50 p-5 text-center"
+              role="alert"
+            >
+              <p className="text-sm font-semibold text-red-800">
+                {commentsError}
+              </p>
+              <Button
+                variant="secondary"
+                className="mt-4"
+                onClick={() => {
+                  setCommentsLoading(true);
+                  setCommentsError(null);
+                  setRetryKey((current) => current + 1);
+                }}
+              >
+                Yeniden dene
+              </Button>
+            </div>
           ) : comments.length === 0 ? (
             <EmptyState
               title="Henüz yorum yok"
@@ -205,9 +238,13 @@ export function IdeaComments({ ideaId }: IdeaCommentsProps) {
                     )
                   }
                   onRemoved={(commentId) =>
-                    setComments((current) =>
-                      current.filter((item) => item.id !== commentId),
-                    )
+                    setComments((current) => {
+                      const nextComments = current.filter(
+                        (item) => item.id !== commentId,
+                      );
+                      onCountChange?.(nextComments.length);
+                      return nextComments;
+                    })
                   }
                   onHidden={(commentId) =>
                     setComments((current) =>
@@ -247,9 +284,7 @@ function CommentItem({
 }: CommentItemProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(comment.content);
-  const [action, setAction] = useState<"edit" | "delete" | "hide" | null>(
-    null,
-  );
+  const [action, setAction] = useState<"edit" | "delete" | "hide" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const isOwner = currentUserId === comment.userId;
   const isAdmin = isAdminRole(viewerRole);
@@ -302,30 +337,36 @@ function CommentItem({
         <div className="flex min-w-0 items-start gap-3">
           <span
             aria-hidden="true"
-            className="flex size-10 shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-black text-blue-800"
+            className="flex size-10 shrink-0 items-center justify-center rounded-full bg-blue-100 bg-cover bg-center text-sm font-black text-blue-800"
+            style={
+              comment.userAvatarUrl
+                ? { backgroundImage: `url("${comment.userAvatarUrl}")` }
+                : undefined
+            }
           >
-            {comment.userName.trim().charAt(0).toLocaleUpperCase("tr-TR") ||
-              "K"}
+            {!comment.userAvatarUrl &&
+              (comment.userName.trim().charAt(0).toLocaleUpperCase("tr-TR") ||
+                "K")}
           </span>
           <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="break-words font-semibold text-slate-950">
-              {comment.userName}
-            </h3>
-            <Badge className="bg-white text-slate-700">
-              {USER_ROLE_LABELS[comment.userRole]}
-            </Badge>
-            {comment.status === "hidden" && (
-              <Badge className="bg-amber-100 text-amber-800">Gizli</Badge>
-            )}
-          </div>
-          <time className="mt-1 block text-xs text-slate-500">
-            {new Intl.DateTimeFormat("tr-TR", {
-              dateStyle: "medium",
-              timeStyle: "short",
-            }).format(new Date(comment.createdAt))}
-            {comment.updatedAt !== comment.createdAt && " · Düzenlendi"}
-          </time>
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="break-words font-semibold text-slate-950">
+                {comment.userName}
+              </h3>
+              <Badge className="bg-white text-slate-700">
+                {USER_ROLE_LABELS[comment.userRole]}
+              </Badge>
+              {comment.status === "hidden" && (
+                <Badge className="bg-amber-100 text-amber-800">Gizli</Badge>
+              )}
+            </div>
+            <time className="mt-1 block text-xs text-slate-500">
+              {new Intl.DateTimeFormat("tr-TR", {
+                dateStyle: "medium",
+                timeStyle: "short",
+              }).format(new Date(comment.createdAt))}
+              {comment.updatedAt !== comment.createdAt && " · Düzenlendi"}
+            </time>
           </div>
         </div>
       </div>
@@ -352,7 +393,7 @@ function CommentItem({
               {action === "edit" && (
                 <LoaderCircle
                   aria-hidden="true"
-                className="size-4 animate-spin"
+                  className="size-4 animate-spin"
                 />
               )}
               Kaydet

@@ -32,6 +32,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { FavoriteIdeas } from "@/components/ideas";
+import { StudentMentorshipSummary } from "@/components/mentorship";
 import { ProfileForm } from "./profile-form";
 
 const TABS = [
@@ -155,6 +156,7 @@ export function ProfileDashboard() {
         editing={editingProfile}
         onToggleEditing={() => setEditingProfile((current) => !current)}
       />
+      {data.profile.role === "student" && <StudentMentorshipSummary />}
 
       {editingProfile && (
         <section id="profil-duzenle" className="mt-6">
