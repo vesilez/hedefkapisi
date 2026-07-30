@@ -8,13 +8,7 @@ import {
   toggleIdeaLike,
 } from "@/services/idea-engagement-service";
 import type { IdeaEngagementState } from "@/types/idea-engagement";
-import {
-  Bookmark,
-  Check,
-  Heart,
-  LoaderCircle,
-  Share2,
-} from "lucide-react";
+import { Bookmark, Check, Heart, LoaderCircle, Share2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -45,21 +39,13 @@ export function IdeaEngagement({
   } | null>(null);
 
   useEffect(() => {
-    return subscribeToIdeaEngagement(
-      ideaId,
-      user?.id ?? null,
-      (result) => {
-        if (result.success) {
-          setState(result.data);
-          setFeedback((current) =>
-            current?.type === "error" ? null : current,
-          );
-        } else {
-          setFeedback({ type: "error", message: result.error.message });
-        }
-        setLoading(false);
-      },
-    );
+    return subscribeToIdeaEngagement(ideaId, user?.id ?? null, (result) => {
+      if (result.success) {
+        setState(result.data);
+        setFeedback((current) => (current?.type === "error" ? null : current));
+      }
+      setLoading(false);
+    });
   }, [ideaId, user?.id]);
 
   function requireUser(): boolean {
@@ -171,10 +157,7 @@ export function IdeaEngagement({
           onClick={() => void toggleLike()}
         >
           {action === "like" ? (
-            <LoaderCircle
-              aria-hidden="true"
-              className="size-4 animate-spin"
-            />
+            <LoaderCircle aria-hidden="true" className="size-4 animate-spin" />
           ) : (
             <Heart
               aria-hidden="true"
@@ -196,16 +179,11 @@ export function IdeaEngagement({
           onClick={() => void toggleFavorite()}
         >
           {action === "favorite" ? (
-            <LoaderCircle
-              aria-hidden="true"
-              className="size-4 animate-spin"
-            />
+            <LoaderCircle aria-hidden="true" className="size-4 animate-spin" />
           ) : (
             <Bookmark
               aria-hidden="true"
-              className={`size-4 ${
-                state.isFavorite ? "fill-current" : ""
-              }`}
+              className={`size-4 ${state.isFavorite ? "fill-current" : ""}`}
             />
           )}
           {state.isFavorite ? "Favorilerimde" : "Favoriye Ekle"}

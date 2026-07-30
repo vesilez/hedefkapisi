@@ -8,7 +8,10 @@ import {
 } from "@/constants/roles";
 import { auth } from "@/lib/firebase/auth";
 import { db } from "@/lib/firebase/firestore";
-import { getFirebaseErrorMessage } from "@/lib/firebase/firebase-error";
+import {
+  getFirebaseErrorCode,
+  getFirebaseErrorMessage,
+} from "@/lib/firebase/firebase-error";
 import { commentContentSchema } from "@/lib/validations/comment-schema";
 import { LEADERBOARD_POINTS } from "@/constants/leaderboard";
 import { applyScoreInTransaction } from "@/services/leaderboard-service";
@@ -70,6 +73,11 @@ function failure<T>(error: unknown): CommentServiceResult<T> {
   };
 }
 
+function isPermissionDenied(error: unknown): boolean {
+  const code = getFirebaseErrorCode(error);
+  return code === "permission-denied" || code === "firestore/permission-denied";
+}
+
 function messageFailure<T>(message: string): CommentServiceResult<T> {
   return { success: false, error: { message } };
 }
@@ -121,7 +129,20 @@ export function subscribeToIdeaComments(
       );
       listener({ success: true, data: comments });
     },
-    (error: unknown) => listener(failure(error)),
+    (error: unknown) => {
+      console.error("[comment-service] Firestore subscription failed", {
+        collection: "comments",
+        ideaId,
+        viewerRole,
+        code: getFirebaseErrorCode(error) ?? "firestore/unknown",
+        error,
+      });
+      if (isPermissionDenied(error)) {
+        listener({ success: true, data: [] });
+        return;
+      }
+      listener(failure(error));
+    },
   );
 }
 

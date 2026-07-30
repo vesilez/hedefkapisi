@@ -5,7 +5,10 @@ import { LEADERBOARD_POINTS } from "@/constants/leaderboard";
 import { SUPPORT_TYPES } from "@/constants/support-types";
 import { auth } from "@/lib/firebase/auth";
 import { db } from "@/lib/firebase/firestore";
-import { getFirebaseErrorMessage } from "@/lib/firebase/firebase-error";
+import {
+  getFirebaseErrorCode,
+  getFirebaseErrorMessage,
+} from "@/lib/firebase/firebase-error";
 import { createNotification } from "@/services/notification-service";
 import { applyScoreInTransaction } from "@/services/leaderboard-service";
 import type {
@@ -71,6 +74,26 @@ function failure<T>(error: unknown): IdeaEngagementResult<T> {
   };
 }
 
+function logEngagementReadError(
+  collectionName: "ideas" | "likes" | "favorites",
+  ideaId: string,
+  userId: string | null,
+  error: unknown,
+): void {
+  console.error("[idea-engagement] Firestore subscription failed", {
+    collection: collectionName,
+    ideaId,
+    userId,
+    code: getFirebaseErrorCode(error) ?? "firestore/unknown",
+    error,
+  });
+}
+
+function isPermissionDenied(error: unknown): boolean {
+  const code = getFirebaseErrorCode(error);
+  return code === "permission-denied" || code === "firestore/permission-denied";
+}
+
 function messageFailure<T>(message: string): IdeaEngagementResult<T> {
   return { success: false, error: { message } };
 }
@@ -111,28 +134,59 @@ export function subscribeToIdeaEngagement(
         ideaLoaded = true;
         emit();
       },
-      (error: unknown) => listener(failure(error)),
+      (error: unknown) => {
+        logEngagementReadError("ideas", ideaId, userId, error);
+        if (isPermissionDenied(error)) {
+          ideaLoaded = true;
+          emit();
+          return;
+        }
+        listener(failure(error));
+      },
     ),
   ];
 
-  if (userId) {
-    const documentId = engagementDocumentId(ideaId, userId);
+  if (userId && auth.currentUser?.uid === userId) {
     unsubscribes.push(
       onSnapshot(
-        doc(db, "likes", documentId),
+        query(
+          collection(db, "likes"),
+          where("ideaId", "==", ideaId),
+          where("userId", "==", userId),
+        ),
         (snapshot) => {
-          isLiked = snapshot.exists();
+          isLiked = !snapshot.empty;
           emit();
         },
-        (error: unknown) => listener(failure(error)),
+        (error: unknown) => {
+          logEngagementReadError("likes", ideaId, userId, error);
+          if (isPermissionDenied(error)) {
+            isLiked = false;
+            emit();
+            return;
+          }
+          listener(failure(error));
+        },
       ),
       onSnapshot(
-        doc(db, "favorites", documentId),
+        query(
+          collection(db, "favorites"),
+          where("ideaId", "==", ideaId),
+          where("userId", "==", userId),
+        ),
         (snapshot) => {
-          isFavorite = snapshot.exists();
+          isFavorite = !snapshot.empty;
           emit();
         },
-        (error: unknown) => listener(failure(error)),
+        (error: unknown) => {
+          logEngagementReadError("favorites", ideaId, userId, error);
+          if (isPermissionDenied(error)) {
+            isFavorite = false;
+            emit();
+            return;
+          }
+          listener(failure(error));
+        },
       ),
     );
   }

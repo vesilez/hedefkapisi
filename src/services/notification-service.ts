@@ -2,7 +2,10 @@ import "client-only";
 
 import { auth } from "@/lib/firebase/auth";
 import { db } from "@/lib/firebase/firestore";
-import { getFirebaseErrorMessage } from "@/lib/firebase/firebase-error";
+import {
+  getFirebaseErrorCode,
+  getFirebaseErrorMessage,
+} from "@/lib/firebase/firebase-error";
 import {
   NOTIFICATION_TYPES,
   type Notification,
@@ -74,6 +77,11 @@ function failure<T>(error: unknown): NotificationServiceResult<T> {
   };
 }
 
+function isPermissionDenied(error: unknown): boolean {
+  const code = getFirebaseErrorCode(error);
+  return code === "permission-denied" || code === "firestore/permission-denied";
+}
+
 function notificationData(input: CreateNotificationInput) {
   const actorId = auth.currentUser?.uid;
   if (!actorId) throw new Error("notification/unauthenticated");
@@ -133,6 +141,16 @@ export function subscribeToNotifications(
   userId: string,
   listener: (result: NotificationServiceResult<Notification[]>) => void,
 ): Unsubscribe {
+  if (!userId || auth.currentUser?.uid !== userId) {
+    console.warn("[notifications] Subscription skipped", {
+      requestedUserId: userId,
+      authenticatedUserId: auth.currentUser?.uid ?? null,
+      reason: "authenticated-user-mismatch",
+    });
+    queueMicrotask(() => listener({ success: true, data: [] }));
+    return () => undefined;
+  }
+
   return onSnapshot(
     query(collection(db, "notifications"), where("userId", "==", userId)),
     (snapshots) => {
@@ -162,7 +180,19 @@ export function subscribeToNotifications(
       );
       listener({ success: true, data: notifications.slice(0, 20) });
     },
-    (error: unknown) => listener(failure(error)),
+    (error: unknown) => {
+      console.error("[notifications] Firestore subscription failed", {
+        collection: "notifications",
+        userId,
+        code: getFirebaseErrorCode(error) ?? "firestore/unknown",
+        error,
+      });
+      if (isPermissionDenied(error)) {
+        listener({ success: true, data: [] });
+        return;
+      }
+      listener(failure(error));
+    },
   );
 }
 

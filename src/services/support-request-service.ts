@@ -5,7 +5,10 @@ import { SUPPORT_REQUEST_STATUSES } from "@/constants/support-request-statuses";
 import { SUPPORT_TYPES } from "@/constants/support-types";
 import { auth } from "@/lib/firebase/auth";
 import { db } from "@/lib/firebase/firestore";
-import { getFirebaseErrorMessage } from "@/lib/firebase/firebase-error";
+import {
+  getFirebaseErrorCode,
+  getFirebaseErrorMessage,
+} from "@/lib/firebase/firebase-error";
 import { createSupportRequestSchema } from "@/lib/validations/support-request-schema";
 import {
   createNotification,
@@ -78,6 +81,11 @@ const requestSchema = z.object({
 });
 
 function failure<T>(error: unknown): SupportRequestServiceResult<T> {
+  console.error("[support-request-service] Firestore operation failed", {
+    userId: auth.currentUser?.uid ?? null,
+    code: getFirebaseErrorCode(error) ?? "firestore/unknown",
+    error,
+  });
   return {
     success: false,
     error: { message: getFirebaseErrorMessage(error) },
@@ -157,18 +165,9 @@ export async function createSupportRequest(
     return messageFailure("Başvuru yapmak için giriş yapmalısınız.");
 
   try {
-    const [profile, idea, duplicates] = await Promise.all([
+    const [profile, idea] = await Promise.all([
       getDoc(doc(db, "users", supporterId)),
       getDoc(doc(db, "ideas", validation.data.ideaId)),
-      getDocs(
-        query(
-          collection(db, "supportRequests"),
-          where("supporterId", "==", supporterId),
-          where("ideaId", "==", validation.data.ideaId),
-          where("status", "==", "pending"),
-          limit(1),
-        ),
-      ),
     ]);
 
     if (!profile.exists())
@@ -196,6 +195,15 @@ export async function createSupportRequest(
     if (idea.data().studentId === supporterId) {
       return messageFailure("Kendi fikrinize destek başvurusu yapamazsınız.");
     }
+    const duplicates = await getDocs(
+      query(
+        collection(db, "supportRequests"),
+        where("supporterId", "==", supporterId),
+        where("ideaId", "==", validation.data.ideaId),
+        where("status", "==", "pending"),
+        limit(1),
+      ),
+    );
     if (!duplicates.empty) {
       return messageFailure(
         "Bu fikir için zaten değerlendirme bekleyen bir destek başvurun var.",
