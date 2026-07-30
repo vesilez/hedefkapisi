@@ -70,15 +70,12 @@ export async function getPublicIdeaBySlug(
         collection(db, "ideas"),
         where("slug", "==", normalizedSlug),
         where("status", "==", "approved"),
+        where("visibility", "in", ["public", "anonymous"]),
         limit(1),
       ),
     );
     const snapshot = snapshots.docs[0];
-    if (
-      !snapshot ||
-      snapshot.data().status !== "approved" ||
-      snapshot.data().visibility === "private"
-    ) {
+    if (!snapshot || snapshot.data().status !== "approved") {
       return { success: true, data: null };
     }
 

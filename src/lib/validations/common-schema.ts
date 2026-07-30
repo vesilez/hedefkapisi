@@ -25,8 +25,17 @@ export const phoneSchema = z
   .nullable()
   .optional();
 
+const httpUrlSchema = z.url("Geçerli bir URL girin.").refine((value) => {
+  try {
+    const protocol = new URL(value).protocol;
+    return protocol === "https:" || protocol === "http:";
+  } catch {
+    return false;
+  }
+}, "Yalnızca http veya https bağlantıları kullanılabilir.");
+
 export const urlSchema = z
-  .union([z.url("Geçerli bir URL girin."), z.literal("")])
+  .union([httpUrlSchema, z.literal("")])
   .nullable()
   .optional();
 

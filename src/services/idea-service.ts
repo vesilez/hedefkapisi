@@ -548,7 +548,11 @@ export async function getPublicIdeas(
   try {
     const [snapshots, comments] = await Promise.all([
       getDocs(
-        query(collection(db, "ideas"), where("status", "==", "approved")),
+        query(
+          collection(db, "ideas"),
+          where("status", "==", "approved"),
+          where("visibility", "in", ["public", "anonymous"]),
+        ),
       ),
       getDocs(
         query(collection(db, "comments"), where("status", "==", "active")),
@@ -564,8 +568,6 @@ export async function getPublicIdeas(
     }
 
     for (const snapshot of snapshots.docs) {
-      if (snapshot.data().visibility === "private") continue;
-
       const parsed = ideaListItemSchema.safeParse({
         ...snapshot.data(),
         commentCount: commentCounts.get(snapshot.id) ?? 0,

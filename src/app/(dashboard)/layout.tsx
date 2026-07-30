@@ -1,3 +1,4 @@
+import { ProtectedRoute } from "@/components/auth/protected-route";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -7,5 +8,5 @@ export const metadata: Metadata = {
 export default function DashboardLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  return children;
+  return <ProtectedRoute area="dashboard">{children}</ProtectedRoute>;
 }

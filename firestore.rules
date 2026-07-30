@@ -33,6 +33,20 @@ service cloud.firestore {
         && !value.matches(".*<.*");
     }
 
+    function validOptionalText(value, maximum) {
+      return value == null
+        || (value is string
+          && value.size() <= maximum
+          && !value.matches(".*<.*"));
+    }
+
+    function validOptionalWebUrl(value) {
+      return value == null
+        || (value is string
+          && value.size() <= 2048
+          && value.matches("^https?://.*"));
+    }
+
     function validAchievement(value) {
       return value is map
         && value.keys().hasOnly(["unlocked", "unlockedAt"])
@@ -81,6 +95,14 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
+      function validEditableProfileFields() {
+        return safeUserText(request.resource.data.name, 2, 50)
+          && safeUserText(request.resource.data.surname, 2, 50)
+          && safeUserText(request.resource.data.city, 2, 100)
+          && validOptionalText(request.resource.data.get("phone", null), 30)
+          && validOptionalWebUrl(request.resource.data.get("avatarUrl", null));
+      }
+
       function validRegistrationSponsorProfile() {
         let profile = request.resource.data.get("sponsorProfile", null);
         return (
@@ -190,6 +212,7 @@ service cloud.firestore {
               && request.resource.data.get("achievements", {}) == resource.data.get("achievements", {})
               && request.resource.data.get("score", 0) == resource.data.get("score", 0)
               && request.resource.data.get("lastScoreEventId", null) == resource.data.get("lastScoreEventId", null)
+              && validEditableProfileFields()
             )
             || validAchievementBackfill()
             || validScoreUpdate()
@@ -422,10 +445,6 @@ service cloud.firestore {
     }
 
     match /mentorNotes/{noteId} {
-      function mentorship() {
-        return get(/databases/$(database)/documents/mentorships/$(resource.data.mentorshipId));
-      }
-
       allow read: if signedIn()
         && (resource.data.mentorId == request.auth.uid || isAdmin());
       allow create: if signedIn()
@@ -519,7 +538,46 @@ service cloud.firestore {
           && request.resource.data.moderatedBy == null
           && request.resource.data.moderatedAt == null
           && request.resource.data.createdAt == request.time
-          && request.resource.data.updatedAt == request.time;
+          && request.resource.data.updatedAt == request.time
+          && validIdeaContent();
+      }
+
+      function validIdeaContent() {
+        return safeUserText(request.resource.data.title, 5, 100)
+          && safeUserText(request.resource.data.shortDescription, 20, 240)
+          && safeUserText(request.resource.data.description, 50, 5000)
+          && safeUserText(request.resource.data.problem, 20, 2000)
+          && safeUserText(request.resource.data.solution, 20, 2000)
+          && safeUserText(request.resource.data.targetAudience, 5, 500)
+          && request.resource.data.slug is string
+          && request.resource.data.slug.size() >= 1
+          && request.resource.data.slug.size() <= 140
+          && request.resource.data.slug.matches("^[a-z0-9]+(?:-[a-z0-9]+)*$")
+          && request.resource.data.categoryId in [
+            "ai", "software", "education", "health", "agriculture",
+            "environment", "social_enterprise", "game", "robotics",
+            "tourism", "culture_art", "accessibility", "other"
+          ]
+          && validOptionalText(request.resource.data.city, 100)
+          && request.resource.data.stage in [
+            "dream", "idea", "research", "prototype", "team_building",
+            "support_needed", "implemented", "startup", "completed"
+          ]
+          && request.resource.data.supportNeeds is list
+          && request.resource.data.supportNeeds.size() >= 1
+          && request.resource.data.supportNeeds.size() <= 6
+          && request.resource.data.supportNeeds.hasOnly([
+            "mentorship", "software", "design", "business_model", "education",
+            "team_member", "equipment", "financial", "internship", "academic",
+            "promotion", "company_visit"
+          ])
+          && request.resource.data.visibility in ["public", "anonymous", "private"]
+          && validOptionalWebUrl(request.resource.data.coverImageUrl)
+          && request.resource.data.attachmentUrls is list
+          && request.resource.data.attachmentUrls.size() <= 5
+          && validOptionalWebUrl(request.resource.data.prototypeUrl)
+          && validOptionalWebUrl(request.resource.data.githubUrl)
+          && validOptionalWebUrl(request.resource.data.websiteUrl);
       }
 
       function ownerEdit() {
@@ -540,7 +598,8 @@ service cloud.firestore {
           )
           && request.resource.data.moderatedBy == null
           && request.resource.data.moderatedAt == null
-          && request.resource.data.publishedAt == null;
+          && request.resource.data.publishedAt == null
+          && validIdeaContent();
       }
 
       function likeCountUpdate() {
@@ -581,7 +640,12 @@ service cloud.firestore {
           && request.resource.data.moderatedBy == request.auth.uid;
       }
 
-      allow read: if resource.data.status == "approved" || isOwner() || isAdmin();
+      allow read: if (
+          resource.data.status == "approved"
+          && resource.data.visibility in ["public", "anonymous"]
+        )
+        || isOwner()
+        || isAdmin();
       allow create: if validOwnerCreate();
       allow update: if ownerEdit() || likeCountUpdate() || sponsorSupportCountUpdate() || adminEdit();
       allow delete: if isAdmin();
@@ -608,6 +672,11 @@ service cloud.firestore {
         && request.resource.data.supportTypes is list
         && request.resource.data.supportTypes.size() >= 1
         && request.resource.data.supportTypes.size() <= 4
+        && request.resource.data.supportTypes.hasOnly([
+          "mentorship", "software", "design", "business_model", "education",
+          "team_member", "equipment", "financial", "internship", "academic",
+          "promotion", "company_visit"
+        ])
         && request.resource.data.adminNote == ""
         && request.resource.data.reviewedBy == null
         && request.resource.data.reviewedAt == null
