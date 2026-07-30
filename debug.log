@@ -3,3 +3,15 @@
 [0730/145212.506:ERROR:net\socket\ssl_client_socket_impl.cc:964] handshake failed; returned -1, SSL error code 1, net_error -100
 [0730/145214.122:ERROR:net\socket\ssl_client_socket_impl.cc:964] handshake failed; returned -1, SSL error code 1, net_error -100
 [0730/145214.130:ERROR:net\socket\ssl_client_socket_impl.cc:964] handshake failed; returned -1, SSL error code 1, net_error -100
+[0730/145325.969:ERROR:net\socket\ssl_client_socket_impl.cc:964] handshake failed; returned -1, SSL error code 1, net_error -100
+[0730/145325.989:ERROR:net\socket\ssl_client_socket_impl.cc:964] handshake failed; returned -1, SSL error code 1, net_error -100
+[0730/145327.586:ERROR:net\socket\ssl_client_socket_impl.cc:964] handshake failed; returned -1, SSL error code 1, net_error -100
+[0730/145508.494:ERROR:net\socket\ssl_client_socket_impl.cc:964] handshake failed; returned -1, SSL error code 1, net_error -100
+[0730/145509.694:ERROR:net\socket\ssl_client_socket_impl.cc:964] handshake failed; returned -1, SSL error code 1, net_error -100
+[0730/145658.675:ERROR:net\socket\ssl_client_socket_impl.cc:964] handshake failed; returned -1, SSL error code 1, net_error -100
+[0730/145658.689:ERROR:net\socket\ssl_client_socket_impl.cc:964] handshake failed; returned -1, SSL error code 1, net_error -100
+[0730/145809.760:ERROR:net\socket\ssl_client_socket_impl.cc:964] handshake failed; returned -1, SSL error code 1, net_error -100
+[0730/145844.070:ERROR:net\socket\ssl_client_socket_impl.cc:964] handshake failed; returned -1, SSL error code 1, net_error -100
+[0730/145844.094:ERROR:net\socket\ssl_client_socket_impl.cc:964] handshake failed; returned -1, SSL error code 1, net_error -100
+[0730/150033.197:ERROR:net\socket\ssl_client_socket_impl.cc:964] handshake failed; returned -1, SSL error code 1, net_error -100
+[0730/150033.210:ERROR:net\socket\ssl_client_socket_impl.cc:964] handshake failed; returned -1, SSL error code 1, net_error -100
