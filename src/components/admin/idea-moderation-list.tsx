@@ -5,10 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { DEFAULT_CATEGORIES } from "@/constants/default-categories";
-import {
-  IDEA_STATUS_LABELS,
-  type IdeaStatus,
-} from "@/constants/idea-statuses";
+import { IDEA_STATUS_LABELS, type IdeaStatus } from "@/constants/idea-statuses";
 import { isAdminRole } from "@/constants/roles";
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -29,11 +26,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 type ViewState =
-  | "loading"
-  | "ready"
-  | "forbidden"
-  | "profile-error"
-  | "ideas-error";
+  "loading" | "ready" | "forbidden" | "profile-error" | "ideas-error";
 
 type IdeaAction = "approve" | "reject" | "delete";
 
@@ -106,10 +99,13 @@ export function IdeaModerationList() {
       if (!active) return;
       void applyAccessProfile(user.id, profileResult);
     });
-    const unsubscribe = subscribeToUserAccessProfile(user.id, (profileResult) => {
-      if (!active) return;
-      void applyAccessProfile(user.id, profileResult);
-    });
+    const unsubscribe = subscribeToUserAccessProfile(
+      user.id,
+      (profileResult) => {
+        if (!active) return;
+        void applyAccessProfile(user.id, profileResult);
+      },
+    );
 
     return () => {
       active = false;
@@ -161,7 +157,9 @@ export function IdeaModerationList() {
 
   async function deleteIdea(ideaId: string) {
     if (!user || activeAction) return;
-    if (!window.confirm("Bu hayali kalıcı olarak silmek istediğine emin misin?")) {
+    if (
+      !window.confirm("Bu hayali kalıcı olarak silmek istediğine emin misin?")
+    ) {
       return;
     }
 
@@ -275,8 +273,11 @@ export function IdeaModerationList() {
         </div>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <p className="border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-medium text-slate-600 md:hidden">
+            Tüm sütunları görmek için tabloyu yatay kaydır.
+          </p>
           <div
-            className="-mx-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0"
+            className="overflow-x-auto overscroll-x-contain pb-2 [scrollbar-gutter:stable]"
             role="region"
             aria-label="Hayal yönetimi tablosu"
             tabIndex={0}

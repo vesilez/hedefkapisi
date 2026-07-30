@@ -118,7 +118,7 @@ export default function HomePage() {
               Fikrini anlaşılır bir yapıyla paylaş. İhtiyacını belirt, sana
               katkı sunabilecek insanlarla buluş.
             </p>
-            <div className="relative mt-6 grid grid-cols-2 gap-3 border-t border-slate-100 pt-6">
+            <div className="relative mt-6 grid gap-3 border-t border-slate-100 pt-6 min-[360px]:grid-cols-2">
               <div className="rounded-xl bg-slate-50 p-4">
                 <p className="text-2xl font-black text-blue-700">3 adım</p>
                 <p className="mt-1 text-xs font-medium text-slate-600">

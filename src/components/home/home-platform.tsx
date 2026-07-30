@@ -128,7 +128,7 @@ export function HomePlatform() {
             </p>
           </div>
 
-          <div className="mt-8 grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-5">
+          <div className="mt-8 grid gap-3 min-[360px]:grid-cols-2 lg:grid-cols-4 lg:gap-5">
             {statistics.map(({ label, value, description, icon: Icon }) => (
               <Card
                 key={label}
@@ -181,7 +181,7 @@ export function HomePlatform() {
           </div>
 
           <div
-            className="mx-auto mt-8 flex max-w-2xl gap-2 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-2"
+            className="mx-auto mt-8 grid max-w-2xl gap-2 rounded-2xl border border-slate-200 bg-white p-2 sm:grid-cols-3"
             role="tablist"
             aria-label="Hayal keşfetme seçenekleri"
           >
@@ -193,7 +193,7 @@ export function HomePlatform() {
                 aria-selected={activeTab === tab.id}
                 aria-controls="home-discovery-panel"
                 onClick={() => setActiveTab(tab.id)}
-                className={`min-h-11 flex-1 whitespace-nowrap rounded-xl px-4 py-2 text-sm font-semibold ${
+                className={`min-h-11 rounded-xl px-3 py-2 text-sm font-semibold sm:px-4 ${
                   activeTab === tab.id
                     ? "bg-blue-700 text-white shadow-sm"
                     : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"

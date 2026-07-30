@@ -277,7 +277,7 @@ export function ChatDashboard() {
         </p>
       )}
 
-      <div className="grid h-[clamp(34rem,68dvh,48rem)] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:grid-cols-[22rem_minmax(0,1fr)]">
+      <div className="grid h-[clamp(30rem,68dvh,48rem)] min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:grid-cols-[22rem_minmax(0,1fr)]">
         <aside
           className={`min-h-0 lg:border-r lg:border-slate-200 ${
             selectedChat ? "hidden lg:flex" : "flex"
@@ -528,9 +528,11 @@ export function ChatDashboard() {
                       )}
                     </Button>
                   </div>
-                  <div className="mt-1.5 flex justify-between gap-3 text-xs text-slate-500">
-                    <span>Enter gönderir · Shift+Enter yeni satır</span>
-                    <span>{content.length}/2000</span>
+                  <div className="mt-1.5 flex justify-end gap-3 text-xs text-slate-500 sm:justify-between">
+                    <span className="hidden sm:inline">
+                      Enter gönderir · Shift+Enter yeni satır
+                    </span>
+                    <span className="shrink-0">{content.length}/2000</span>
                   </div>
                 </div>
               )}

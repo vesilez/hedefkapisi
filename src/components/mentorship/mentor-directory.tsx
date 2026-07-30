@@ -178,14 +178,14 @@ function MentorshipRequestDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/60 p-2 sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="mentorship-request-title"
     >
-      <Card className="max-h-[90dvh] w-full max-w-xl overflow-y-auto">
-        <div className="flex items-start justify-between gap-4">
-          <div>
+      <Card className="max-h-[calc(100dvh-1rem)] w-full max-w-xl overscroll-contain overflow-y-auto sm:max-h-[90dvh]">
+        <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+          <div className="min-w-0">
             <h2
               id="mentorship-request-title"
               className="text-xl font-bold text-slate-950"
@@ -196,7 +196,11 @@ function MentorshipRequestDialog({
               Hangi konularda destek istediğini açıkça paylaş.
             </p>
           </div>
-          <Button variant="ghost" onClick={onClose}>
+          <Button
+            className="w-full shrink-0 sm:w-auto"
+            variant="ghost"
+            onClick={onClose}
+          >
             Kapat
           </Button>
         </div>

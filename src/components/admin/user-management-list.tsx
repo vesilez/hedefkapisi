@@ -6,15 +6,8 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Select } from "@/components/ui/select";
-import {
-  USER_ROLES,
-  USER_ROLE_LABELS,
-  type UserRole,
-} from "@/constants/roles";
-import {
-  USER_STATUS_LABELS,
-  type UserStatus,
-} from "@/constants/user-statuses";
+import { USER_ROLES, USER_ROLE_LABELS, type UserRole } from "@/constants/roles";
+import { USER_STATUS_LABELS, type UserStatus } from "@/constants/user-statuses";
 import { useAuth } from "@/hooks/use-auth";
 import {
   getAdminUsers,
@@ -135,10 +128,7 @@ export function UserManagementList() {
     setActiveAction(null);
   }
 
-  async function changeStatus(
-    userId: string,
-    currentStatus: UserStatus,
-  ) {
+  async function changeStatus(userId: string, currentStatus: UserStatus) {
     if (!user || activeAction) return;
 
     const status: ManagedStatus =
@@ -186,10 +176,7 @@ export function UserManagementList() {
         <p className="font-semibold text-red-800">
           {feedback?.message ?? "Kullanıcılar şu anda yüklenemiyor."}
         </p>
-        <Button
-          className="mt-4"
-          onClick={() => void loadUsers(user.id)}
-        >
+        <Button className="mt-4" onClick={() => void loadUsers(user.id)}>
           Tekrar Dene
         </Button>
       </div>
@@ -259,7 +246,9 @@ export function UserManagementList() {
 
       {filteredUsers.length === 0 ? (
         <EmptyState
-          title={users.length === 0 ? "Henüz kullanıcı yok" : "Sonuç bulunamadı"}
+          title={
+            users.length === 0 ? "Henüz kullanıcı yok" : "Sonuç bulunamadı"
+          }
           description={
             users.length === 0
               ? "Kayıt olan kullanıcılar burada görüntülenecek."
@@ -269,8 +258,11 @@ export function UserManagementList() {
         />
       ) : (
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <p className="border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-medium text-slate-600 md:hidden">
+            Tüm sütunları görmek için tabloyu yatay kaydır.
+          </p>
           <div
-            className="-mx-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0"
+            className="overflow-x-auto overscroll-x-contain pb-2 [scrollbar-gutter:stable]"
             role="region"
             aria-label="Kullanıcı yönetimi tablosu"
             tabIndex={0}
@@ -278,12 +270,24 @@ export function UserManagementList() {
             <table className="w-full min-w-6xl border-collapse text-left">
               <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
                 <tr>
-                  <th className="px-5 py-4 font-semibold" scope="col">Ad Soyad</th>
-                  <th className="px-5 py-4 font-semibold" scope="col">E-posta</th>
-                  <th className="px-5 py-4 font-semibold" scope="col">Rol</th>
-                  <th className="px-5 py-4 font-semibold" scope="col">Durum</th>
-                  <th className="px-5 py-4 font-semibold" scope="col">Kayıt Tarihi</th>
-                  <th className="px-5 py-4 font-semibold" scope="col">İşlemler</th>
+                  <th className="px-5 py-4 font-semibold" scope="col">
+                    Ad Soyad
+                  </th>
+                  <th className="px-5 py-4 font-semibold" scope="col">
+                    E-posta
+                  </th>
+                  <th className="px-5 py-4 font-semibold" scope="col">
+                    Rol
+                  </th>
+                  <th className="px-5 py-4 font-semibold" scope="col">
+                    Durum
+                  </th>
+                  <th className="px-5 py-4 font-semibold" scope="col">
+                    Kayıt Tarihi
+                  </th>
+                  <th className="px-5 py-4 font-semibold" scope="col">
+                    İşlemler
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
@@ -350,10 +354,7 @@ export function UserManagementList() {
                           }
                           disabled={isSelf || isBusy}
                           onClick={() =>
-                            void changeStatus(
-                              listedUser.id,
-                              listedUser.status,
-                            )
+                            void changeStatus(listedUser.id, listedUser.status)
                           }
                         >
                           {isBusy && activeAction.type === "status" && (
