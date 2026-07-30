@@ -24,6 +24,7 @@ import {
 } from "@/types/admin-analytics";
 import {
   ArrowRight,
+  Building2,
   Clock3,
   GraduationCap,
   HandHeart,
@@ -221,6 +222,12 @@ export function AdminOverview() {
       tone: "bg-cyan-100 text-cyan-700",
     },
     {
+      label: "Sponsor",
+      value: statistics.users.sponsors,
+      icon: Building2,
+      tone: "bg-pink-100 text-pink-700",
+    },
+    {
       label: "Toplam hayal",
       value: statistics.ideas.total,
       icon: Lightbulb,
@@ -233,6 +240,18 @@ export function AdminOverview() {
       tone: "bg-orange-100 text-orange-700",
     },
     {
+      label: "Onaylanan hayal",
+      value: statistics.ideas.approved,
+      icon: UserRoundCheck,
+      tone: "bg-green-100 text-green-700",
+    },
+    {
+      label: "Toplam destek başvurusu",
+      value: statistics.supportRequests.total,
+      icon: HandHeart,
+      tone: "bg-teal-100 text-teal-700",
+    },
+    {
       label: "Bekleyen destek başvurusu",
       value: statistics.supportRequests.pending,
       icon: HandHeart,
@@ -243,6 +262,24 @@ export function AdminOverview() {
       value: statistics.ideas.addedLastSevenDays,
       icon: Sparkles,
       tone: "bg-fuchsia-100 text-fuchsia-700",
+    },
+    {
+      label: "Son 30 gün yeni kullanıcı",
+      value: statistics.users.addedLastThirtyDays,
+      icon: UserPlus,
+      tone: "bg-sky-100 text-sky-700",
+    },
+    {
+      label: "Son 30 gün yeni hayal",
+      value: statistics.ideas.addedLastThirtyDays,
+      icon: Sparkles,
+      tone: "bg-violet-100 text-violet-700",
+    },
+    {
+      label: "Son 30 gün destek başvurusu",
+      value: statistics.supportRequests.addedLastThirtyDays,
+      icon: HandHeart,
+      tone: "bg-lime-100 text-lime-700",
     },
   ];
 

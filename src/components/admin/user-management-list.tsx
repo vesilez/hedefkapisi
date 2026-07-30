@@ -6,6 +6,8 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Select } from "@/components/ui/select";
+import { AdminPagination, AdminToast } from "./admin-table-tools";
+import { exportCsv } from "@/lib/utils/export-csv";
 import { USER_ROLES, USER_ROLE_LABELS, type UserRole } from "@/constants/roles";
 import { USER_STATUS_LABELS, type UserStatus } from "@/constants/user-statuses";
 import { useAuth } from "@/hooks/use-auth";
@@ -15,9 +17,9 @@ import {
   updateUserStatusAsAdmin,
   type AdminUserListItem,
 } from "@/services/user-service";
-import { LoaderCircle, Search, Users } from "lucide-react";
+import { Download, LoaderCircle, Search, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type ViewState = "loading" | "ready" | "error";
 type ManagedStatus = Extract<UserStatus, "active" | "suspended">;
@@ -45,6 +47,9 @@ export function UserManagementList() {
   );
   const [activeAction, setActiveAction] = useState<ActiveAction | null>(null);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
+  const [sort, setSort] = useState<"newest" | "oldest" | "name">("newest");
+  const [page, setPage] = useState(1);
+  const pageSize = 15;
 
   async function loadUsers(adminId: string) {
     setState("loading");
@@ -101,8 +106,17 @@ export function UserManagementList() {
         statusFilter === "all" || listedUser.status === statusFilter;
 
       return matchesSearch && matchesRole && matchesStatus;
-    });
-  }, [roleFilter, search, statusFilter, users]);
+    }).sort((first, second) =>
+      sort === "name"
+        ? `${first.name} ${first.surname}`.localeCompare(`${second.name} ${second.surname}`, "tr-TR")
+        : sort === "oldest"
+          ? first.createdAt.localeCompare(second.createdAt)
+          : second.createdAt.localeCompare(first.createdAt),
+    );
+  }, [roleFilter, search, sort, statusFilter, users]);
+  const safePage = Math.min(page, Math.max(1, Math.ceil(filteredUsers.length / pageSize)));
+  const pageUsers = filteredUsers.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const closeToast = useCallback(() => setFeedback(null), []);
 
   async function changeRole(userId: string, role: UserRole) {
     if (!user || activeAction) return;
@@ -185,21 +199,9 @@ export function UserManagementList() {
 
   return (
     <div>
-      {feedback && (
-        <p
-          className={
-            feedback.type === "success"
-              ? "mb-5 rounded-xl bg-emerald-50 p-4 font-semibold text-emerald-800"
-              : "mb-5 rounded-xl bg-red-50 p-4 font-semibold text-red-800"
-          }
-          role={feedback.type === "error" ? "alert" : "status"}
-          aria-live="polite"
-        >
-          {feedback.message}
-        </p>
-      )}
+      <AdminToast toast={feedback} onClose={closeToast} />
 
-      <div className="mb-6 grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mb-6 grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:grid-cols-2 xl:grid-cols-5">
         <label className="relative sm:col-span-2">
           <span className="sr-only">İsim veya e-posta ile ara</span>
           <Search
@@ -229,6 +231,17 @@ export function UserManagementList() {
             ))}
           </Select>
         </label>
+        <Select aria-label="Kullanıcıları sırala" value={sort} onChange={(event) => setSort(event.target.value as typeof sort)}>
+          <option value="newest">En yeni</option>
+          <option value="oldest">En eski</option>
+          <option value="name">Ada göre</option>
+        </Select>
+        <Button
+          variant="secondary"
+          onClick={() => exportCsv("kullanicilar.csv", ["Ad Soyad", "E-posta", "Rol", "Durum", "Kayıt Tarihi"], filteredUsers.map((listedUser) => [`${listedUser.name} ${listedUser.surname}`, listedUser.email, USER_ROLE_LABELS[listedUser.role], USER_STATUS_LABELS[listedUser.status], listedUser.createdAt]))}
+        >
+          <Download aria-hidden="true" className="size-4" /> CSV Dışa Aktar
+        </Button>
         <label>
           <span className="sr-only">Duruma göre filtrele</span>
           <Select
@@ -291,7 +304,7 @@ export function UserManagementList() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {filteredUsers.map((listedUser) => {
+                {pageUsers.map((listedUser) => {
                   const isSelf = listedUser.id === user.id;
                   const isBusy = activeAction?.userId === listedUser.id;
 
@@ -374,6 +387,7 @@ export function UserManagementList() {
               </tbody>
             </table>
           </div>
+          <AdminPagination page={safePage} pageSize={pageSize} total={filteredUsers.length} onPageChange={setPage} />
         </div>
       )}
     </div>

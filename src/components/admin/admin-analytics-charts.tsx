@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { getAdminAnalytics } from "@/services/admin-analytics-service";
+import { DEFAULT_CATEGORIES } from "@/constants/default-categories";
 import type {
   AdminAnalytics,
   DailyAnalyticsPoint,
@@ -115,6 +116,13 @@ function truncateTitle(value: unknown): string {
 }
 
 function AnalyticsCharts({ analytics }: { analytics: AdminAnalytics }) {
+  const categoryDistribution = analytics.categoryDistribution.map((point) => ({
+    ...point,
+    label:
+      DEFAULT_CATEGORIES.find((category) => category.id === point.name)?.label ??
+      point.label,
+  }));
+
   return (
     <div className="grid gap-5 xl:grid-cols-2">
       <ChartCard
@@ -131,6 +139,44 @@ function AnalyticsCharts({ analytics }: { analytics: AdminAnalytics }) {
         isEmpty={!analytics.ideaCreations.some((point) => point.count > 0)}
       >
         <DailyLineChart data={analytics.ideaCreations} color="#8b5cf6" />
+      </ChartCard>
+
+      <ChartCard
+        title="Son 30 gün destek başvuruları"
+        description="Günlük oluşturulan destek başvurusu sayısı"
+        isEmpty={!analytics.supportRequests.some((point) => point.count > 0)}
+      >
+        <DailyLineChart data={analytics.supportRequests} color="#10b981" />
+      </ChartCard>
+
+      <ChartCard
+        title="Kategori dağılımı"
+        description="Hayallerin kategorilere göre dağılımı"
+        isEmpty={!hasValues(categoryDistribution)}
+      >
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart
+            data={categoryDistribution}
+            layout="vertical"
+            margin={{ top: 8, right: 12, left: 24, bottom: 0 }}
+          >
+            <CartesianGrid stroke="var(--chart-grid)" strokeDasharray="4 4" />
+            <XAxis type="number" allowDecimals={false} stroke="var(--chart-axis)" />
+            <YAxis
+              type="category"
+              dataKey="label"
+              width={120}
+              stroke="var(--chart-axis)"
+              tick={{ fontSize: 10 }}
+              tickFormatter={truncateTitle}
+            />
+            <Tooltip
+              contentStyle={tooltipStyle}
+              formatter={(value) => [Number(value), "Hayal"]}
+            />
+            <Bar dataKey="value" name="Hayal" fill="#f59e0b" radius={[0, 6, 6, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
       </ChartCard>
 
       <ChartCard

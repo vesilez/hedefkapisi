@@ -38,10 +38,13 @@ import {
   getDoc,
   getDocFromServer,
   getDocsFromServer,
+  limit,
   onSnapshot,
+  orderBy,
   query,
   serverTimestamp,
   setDoc,
+  Timestamp,
   where,
   type Unsubscribe,
 } from "firebase/firestore";
@@ -76,6 +79,8 @@ export interface AdminUserStatistics {
   students: number;
   supporters: number;
   mentors: number;
+  sponsors: number;
+  addedLastThirtyDays: number;
 }
 
 export type UserAccessProfileListener = (
@@ -272,7 +277,9 @@ export async function getAdminUsers(
   if (!authorization.success) return authorization;
 
   try {
-    const snapshots = await getDocsFromServer(collection(db, "users"));
+    const snapshots = await getDocsFromServer(
+      query(collection(db, "users"), orderBy("createdAt", "desc"), limit(250)),
+    );
     const users: AdminUserListItem[] = [];
 
     for (const snapshot of snapshots.docs) {
@@ -322,11 +329,17 @@ export async function getAdminUserStatistics(
 
   try {
     const users = collection(db, "users");
-    const [total, students, supporters, mentors] = await Promise.all([
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const [total, students, supporters, mentors, sponsors, addedLastThirtyDays] = await Promise.all([
       getCountFromServer(users),
       getCountFromServer(query(users, where("role", "==", "student"))),
       getCountFromServer(query(users, where("role", "==", "supporter"))),
       getCountFromServer(query(users, where("role", "==", "mentor"))),
+      getCountFromServer(query(users, where("role", "==", "sponsor"))),
+      getCountFromServer(
+        query(users, where("createdAt", ">=", Timestamp.fromDate(thirtyDaysAgo))),
+      ),
     ]);
 
     return {
@@ -336,6 +349,8 @@ export async function getAdminUserStatistics(
         students: students.data().count,
         supporters: supporters.data().count,
         mentors: mentors.data().count,
+        sponsors: sponsors.data().count,
+        addedLastThirtyDays: addedLastThirtyDays.data().count,
       },
     };
   } catch (error: unknown) {

@@ -22,6 +22,8 @@ export interface PopularIdeaPoint {
 export interface AdminAnalytics {
   userRegistrations: DailyAnalyticsPoint[];
   ideaCreations: DailyAnalyticsPoint[];
+  supportRequests: DailyAnalyticsPoint[];
+  categoryDistribution: DistributionPoint<string>[];
   ideaStatusDistribution: DistributionPoint<
     Extract<IdeaStatus, "pending" | "approved" | "rejected">
   >[];

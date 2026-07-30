@@ -4,6 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import {
+  AdminPagination,
+  AdminToast,
+  ConfirmationDialog,
+} from "./admin-table-tools";
+import { exportCsv } from "@/lib/utils/export-csv";
 import { DEFAULT_CATEGORIES } from "@/constants/default-categories";
 import { IDEA_STATUS_LABELS, type IdeaStatus } from "@/constants/idea-statuses";
 import { isAdminRole } from "@/constants/roles";
@@ -21,9 +29,9 @@ import {
   type UserServiceResult,
   type UserAccessProfile,
 } from "@/services/user-service";
-import { Lightbulb, LoaderCircle } from "lucide-react";
+import { Download, Lightbulb, LoaderCircle, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type ViewState =
   "loading" | "ready" | "forbidden" | "profile-error" | "ideas-error";
@@ -48,6 +56,69 @@ export function IdeaModerationList() {
   const [ideas, setIdeas] = useState<AdminIdeaListItem[]>([]);
   const [activeAction, setActiveAction] = useState<ActiveAction | null>(null);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<IdeaStatus | "all">("all");
+  const [sort, setSort] = useState<"newest" | "oldest" | "title">("newest");
+  const [page, setPage] = useState(1);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkAction, setBulkAction] = useState<"approve" | "reject" | null>(null);
+  const pageSize = 10;
+
+  const filteredIdeas = useMemo(() => {
+    const term = search.trim().toLocaleLowerCase("tr-TR");
+    return ideas
+      .filter(({ idea, userName }) => {
+        const matchesSearch =
+          !term ||
+          idea.title.toLocaleLowerCase("tr-TR").includes(term) ||
+          userName.toLocaleLowerCase("tr-TR").includes(term);
+        return matchesSearch && (statusFilter === "all" || idea.status === statusFilter);
+      })
+      .sort((first, second) =>
+        sort === "title"
+          ? first.idea.title.localeCompare(second.idea.title, "tr-TR")
+          : sort === "oldest"
+            ? first.idea.createdAt.localeCompare(second.idea.createdAt)
+            : second.idea.createdAt.localeCompare(first.idea.createdAt),
+      );
+  }, [ideas, search, sort, statusFilter]);
+  const safePage = Math.min(page, Math.max(1, Math.ceil(filteredIdeas.length / pageSize)));
+  const pageIdeas = filteredIdeas.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  const closeToast = useCallback(() => setFeedback(null), []);
+
+  async function runBulkAction() {
+    if (!user || !bulkAction || activeAction) return;
+    const ids = [...selected];
+    const successfulIds = new Set<string>();
+    setBulkAction(null);
+    let completed = 0;
+    for (const ideaId of ids) {
+      const result =
+        bulkAction === "approve"
+          ? await approveIdea(ideaId, user.id)
+          : await rejectAdminIdea(ideaId, user.id);
+      if (result.success) {
+        completed += 1;
+        successfulIds.add(ideaId);
+      }
+    }
+    const status = bulkAction === "approve" ? "approved" : "rejected";
+    setIdeas((current) =>
+      current.map((item) =>
+        successfulIds.has(item.idea.id)
+          ? { ...item, idea: { ...item.idea, status } }
+          : item,
+      ),
+    );
+    setSelected(new Set());
+    setFeedback({
+      type: completed === ids.length ? "success" : "error",
+      message: `${completed}/${ids.length} hayal ${
+        bulkAction === "approve" ? "onaylandı" : "reddedildi"
+      }.`,
+    });
+  }
 
   async function loadAdminIdeas(userId: string) {
     setState("loading");
@@ -241,20 +312,42 @@ export function IdeaModerationList() {
 
   return (
     <div>
-      {feedback && (
-        <p
-          className={
-            feedback.type === "success"
-              ? "mb-5 rounded-xl bg-emerald-50 p-4 font-semibold text-emerald-800"
-              : "mb-5 rounded-xl bg-red-50 p-4 font-semibold text-red-800"
-          }
-          role={feedback.type === "error" ? "alert" : "status"}
-          aria-live="polite"
-        >
-          {feedback.message}
-        </p>
+      <AdminToast toast={feedback} onClose={closeToast} />
+      <ConfirmationDialog
+        open={bulkAction !== null}
+        title={`Seçili hayalleri ${bulkAction === "approve" ? "onayla" : "reddet"}`}
+        description={`${selected.size} hayal için bu işlem uygulanacak.`}
+        confirmLabel={bulkAction === "approve" ? "Onayla" : "Reddet"}
+        destructive={bulkAction === "reject"}
+        onCancel={() => setBulkAction(null)}
+        onConfirm={() => void runBulkAction()}
+      />
+      {ideas.length > 0 && (
+        <div className="mb-6 grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-2 xl:grid-cols-4">
+          <label className="relative md:col-span-2">
+            <span className="sr-only">Hayal veya kullanıcı ara</span>
+            <Search aria-hidden="true" className="absolute left-3 top-3.5 size-4 text-slate-400" />
+            <Input className="pl-9" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Hayal veya kullanıcı ara" />
+          </label>
+          <Select aria-label="Duruma göre filtrele" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as IdeaStatus | "all")}>
+            <option value="all">Tüm durumlar</option>
+            {Object.entries(IDEA_STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </Select>
+          <Select aria-label="Sırala" value={sort} onChange={(event) => setSort(event.target.value as typeof sort)}>
+            <option value="newest">En yeni</option>
+            <option value="oldest">En eski</option>
+            <option value="title">Başlığa göre</option>
+          </Select>
+          <div className="flex flex-wrap gap-2 md:col-span-2 xl:col-span-4">
+            <Button disabled={selected.size === 0} onClick={() => setBulkAction("approve")}>Seçilenleri Onayla ({selected.size})</Button>
+            <Button variant="secondary" className="border-red-200 text-red-700" disabled={selected.size === 0} onClick={() => setBulkAction("reject")}>Seçilenleri Reddet</Button>
+            <Button variant="secondary" className="ml-auto" onClick={() => exportCsv("hayaller.csv", ["Başlık", "Kullanıcı", "Kategori", "Durum", "Tarih"], filteredIdeas.map(({ idea, userName }) => [idea.title, userName, idea.categoryId, IDEA_STATUS_LABELS[idea.status], idea.createdAt]))}>
+              <Download aria-hidden="true" className="size-4" /> CSV
+            </Button>
+          </div>
+        </div>
       )}
-      {ideas.length === 0 ? (
+      {filteredIdeas.length === 0 ? (
         <div>
           <EmptyState
             title="Henüz hayal yok"
@@ -285,6 +378,22 @@ export function IdeaModerationList() {
             <table className="w-full min-w-4xl border-collapse text-left">
               <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
                 <tr>
+                  <th scope="col" className="px-4 py-4">
+                    <input
+                      type="checkbox"
+                      aria-label="Bu sayfadaki bekleyen hayalleri seç"
+                      checked={pageIdeas.some(({ idea }) => idea.status === "pending") && pageIdeas.filter(({ idea }) => idea.status === "pending").every(({ idea }) => selected.has(idea.id))}
+                      onChange={(event) => setSelected((current) => {
+                        const next = new Set(current);
+                        for (const { idea } of pageIdeas) {
+                          if (idea.status !== "pending") continue;
+                          if (event.target.checked) next.add(idea.id);
+                          else next.delete(idea.id);
+                        }
+                        return next;
+                      })}
+                    />
+                  </th>
                   <th scope="col" className="px-5 py-4 font-semibold">
                     Başlık
                   </th>
@@ -306,11 +415,19 @@ export function IdeaModerationList() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {ideas.map(({ idea, userName }) => (
+                {pageIdeas.map(({ idea, userName }) => (
                   <tr
                     key={idea.id}
                     className="transition-colors hover:bg-slate-50"
                   >
+                    <td className="px-4 py-4">
+                      <input type="checkbox" aria-label={`${idea.title} hayalini seç`} disabled={idea.status !== "pending"} checked={selected.has(idea.id)} onChange={(event) => setSelected((current) => {
+                        const next = new Set(current);
+                        if (event.target.checked) next.add(idea.id);
+                        else next.delete(idea.id);
+                        return next;
+                      })} />
+                    </td>
                     <td className="max-w-sm px-5 py-4">
                       <p className="font-semibold text-slate-950">
                         {idea.title}
@@ -393,6 +510,7 @@ export function IdeaModerationList() {
               </tbody>
             </table>
           </div>
+          <AdminPagination page={safePage} pageSize={pageSize} total={filteredIdeas.length} onPageChange={setPage} />
         </div>
       )}
     </div>

@@ -38,6 +38,7 @@ import {
   getDocs,
   getDocsFromServer,
   limit,
+  orderBy,
   query,
   runTransaction,
   serverTimestamp,
@@ -64,7 +65,9 @@ export interface AdminIdeaListItem {
 export interface AdminIdeaStatistics {
   total: number;
   pending: number;
+  approved: number;
   addedLastSevenDays: number;
+  addedLastThirtyDays: number;
 }
 
 const timestampSchema = z.unknown().transform((value, context) => {
@@ -630,7 +633,9 @@ export async function getAdminIdeas(
   if (!authorization.success) return authorization;
 
   try {
-    const snapshots = await getDocsFromServer(collection(db, "ideas"));
+    const snapshots = await getDocsFromServer(
+      query(collection(db, "ideas"), orderBy("createdAt", "desc"), limit(250)),
+    );
     const ideas: Idea[] = [];
 
     for (const snapshot of snapshots.docs) {
@@ -693,14 +698,23 @@ export async function getAdminIdeaStatistics(
     const ideas = collection(db, "ideas");
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const [total, pending, addedLastSevenDays] = await Promise.all([
+    const [total, pending, approved, addedLastSevenDays, addedLastThirtyDays] = await Promise.all([
       getCountFromServer(ideas),
       getCountFromServer(query(ideas, where("status", "==", "pending"))),
+      getCountFromServer(query(ideas, where("status", "==", "approved"))),
       getCountFromServer(
         query(
           ideas,
           where("createdAt", ">=", Timestamp.fromDate(sevenDaysAgo)),
+        ),
+      ),
+      getCountFromServer(
+        query(
+          ideas,
+          where("createdAt", ">=", Timestamp.fromDate(thirtyDaysAgo)),
         ),
       ),
     ]);
@@ -710,7 +724,9 @@ export async function getAdminIdeaStatistics(
       data: {
         total: total.data().count,
         pending: pending.data().count,
+        approved: approved.data().count,
         addedLastSevenDays: addedLastSevenDays.data().count,
+        addedLastThirtyDays: addedLastThirtyDays.data().count,
       },
     };
   } catch (error: unknown) {

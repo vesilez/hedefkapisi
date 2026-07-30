@@ -234,16 +234,27 @@ export async function getAdminAnalytics(
     const authorizationFailure = await ensureAdmin(adminId);
     if (authorizationFailure) return authorizationFailure;
 
-    const [users, ideas] = await Promise.all([
+    const [users, ideas, supportRequests] = await Promise.all([
       getDocsFromServer(collection(db, "users")),
       getDocsFromServer(collection(db, "ideas")),
+      getDocsFromServer(collection(db, "supportRequests")),
     ]);
+
+    const categoryCounts = new Map<string, number>();
+    for (const idea of ideas.docs) {
+      const categoryId = textField(idea.data(), "categoryId", "other");
+      categoryCounts.set(categoryId, (categoryCounts.get(categoryId) ?? 0) + 1);
+    }
 
     return {
       success: true,
       data: {
         userRegistrations: buildDailySeries(users.docs),
         ideaCreations: buildDailySeries(ideas.docs),
+        supportRequests: buildDailySeries(supportRequests.docs),
+        categoryDistribution: [...categoryCounts.entries()]
+          .map(([name, value]) => ({ name, label: name, value }))
+          .sort((first, second) => second.value - first.value),
         ideaStatusDistribution: buildIdeaStatusDistribution(ideas.docs),
         userRoleDistribution: buildRoleDistribution(users.docs),
         mostLikedIdeas: buildMostLikedIdeas(ideas.docs),

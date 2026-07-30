@@ -30,9 +30,11 @@ import {
   getDocs,
   getDocsFromServer,
   limit,
+  orderBy,
   query,
   runTransaction,
   serverTimestamp,
+  Timestamp,
   where,
 } from "firebase/firestore";
 import { z } from "zod";
@@ -47,7 +49,9 @@ export interface AdminSupportRequestListItem {
 }
 
 export interface AdminSupportRequestStatistics {
+  total: number;
   pending: number;
+  addedLastThirtyDays: number;
 }
 
 const timestampSchema = z.unknown().transform((value, context) => {
@@ -341,7 +345,11 @@ export async function getAdminSupportRequests(
 
   try {
     const snapshots = await getDocsFromServer(
-      collection(db, "supportRequests"),
+      query(
+        collection(db, "supportRequests"),
+        orderBy("createdAt", "desc"),
+        limit(250),
+      ),
     );
     const parsedRequests = parseRequests(snapshots);
     if (!parsedRequests.success) return parsedRequests;
@@ -400,13 +408,30 @@ export async function getAdminSupportRequestStatistics(
   if (!authorization.success) return authorization;
 
   try {
-    const pending = await getCountFromServer(
-      query(
-        collection(db, "supportRequests"),
+    const requests = collection(db, "supportRequests");
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const [total, pending, addedLastThirtyDays] = await Promise.all([
+      getCountFromServer(requests),
+      getCountFromServer(query(
+        requests,
         where("status", "==", "pending"),
+      )),
+      getCountFromServer(
+        query(
+          requests,
+          where("createdAt", ">=", Timestamp.fromDate(thirtyDaysAgo)),
+        ),
       ),
-    );
-    return { success: true, data: { pending: pending.data().count } };
+    ]);
+    return {
+      success: true,
+      data: {
+        total: total.data().count,
+        pending: pending.data().count,
+        addedLastThirtyDays: addedLastThirtyDays.data().count,
+      },
+    };
   } catch (error: unknown) {
     return failure(error);
   }

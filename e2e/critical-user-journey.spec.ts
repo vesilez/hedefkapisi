@@ -136,10 +136,25 @@ test("öğrenci, admin ve destekçi kritik kullanıcı yolculuğu", async ({
   await test.step("5. Admin giriş yapar", async () => {
     await login(page, adminEmail, adminPassword);
     await expect(page).toHaveURL(/\/admin(?:\/|\?|$)/);
+    await expect(page.getByText("Toplam kullanıcı")).toBeVisible();
+    await expect(page.getByText("Sponsor", { exact: true })).toBeVisible();
+    await expect(page.getByText("Onaylanan hayal")).toBeVisible();
+    await expect(page.getByText("Toplam destek başvurusu")).toBeVisible();
+    await expect(page.getByText("Son 30 gün destek başvuruları")).toBeVisible();
+    await expect(page.getByText("Kategori dağılımı")).toBeVisible();
+
+    await page.setViewportSize({ width: 375, height: 812 });
+    const hasHorizontalOverflow = await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    );
+    expect(hasHorizontalOverflow).toBe(false);
+    await page.setViewportSize({ width: 1280, height: 900 });
   });
 
   await test.step("6. Admin hayali onaylar", async () => {
     await page.goto("/admin/hayaller");
+    await expect(page.getByPlaceholder("Hayal veya kullanıcı ara")).toBeVisible();
+    await expect(page.getByRole("button", { name: /CSV/ })).toBeVisible();
     const row = page.getByRole("row").filter({ hasText: dreamTitle });
     await expect(row).toBeVisible();
     await row.getByRole("button", { name: "Onayla" }).click();
