@@ -686,7 +686,8 @@ service cloud.firestore {
     }
 
     match /likes/{likeId} {
-      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+      allow list: if signedIn()
+        && resource.data.userId == request.auth.uid;
       allow create: if signedIn()
         && request.resource.data.keys().hasOnly([
           "id", "ideaId", "userId", "createdAt"
@@ -700,7 +701,8 @@ service cloud.firestore {
     }
 
     match /favorites/{favoriteId} {
-      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+      allow list: if signedIn()
+        && resource.data.userId == request.auth.uid;
       allow create: if signedIn()
         && request.resource.data.keys().hasOnly([
           "id", "ideaId", "userId", "createdAt"

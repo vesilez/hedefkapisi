@@ -76,7 +76,7 @@ export function SupportRequestCard({
         : "bg-amber-100 text-amber-800";
 
   return (
-    <Card className="p-5 sm:p-6">
+    <Card className="p-5 sm:p-6" data-testid="support-request-card">
       <div className="flex flex-wrap gap-2">
         <Badge className={statusClass}>
           {SUPPORT_REQUEST_STATUS_LABELS[request.status]}
@@ -100,7 +100,9 @@ export function SupportRequestCard({
         <div>
           <dt className="font-semibold text-slate-700">Destek türü</dt>
           <dd className="mt-1 text-slate-600">
-            {request.supportTypes.map((type) => SUPPORT_TYPE_LABELS[type]).join(", ")}
+            {request.supportTypes
+              .map((type) => SUPPORT_TYPE_LABELS[type])
+              .join(", ")}
           </dd>
         </div>
         <div>
@@ -130,7 +132,9 @@ export function SupportRequestCard({
               </dd>
             </div>
             <div>
-              <dt className="font-semibold text-slate-700">Başvuru sahibi ID</dt>
+              <dt className="font-semibold text-slate-700">
+                Başvuru sahibi ID
+              </dt>
               <dd className="mt-1 break-all text-slate-600">
                 {request.supporterId}
               </dd>
@@ -138,9 +142,7 @@ export function SupportRequestCard({
           </dl>
           {request.status !== "pending" && (
             <div className="mt-4">
-              <h3 className="font-semibold text-slate-900">
-                Yönetici notu
-              </h3>
+              <h3 className="font-semibold text-slate-900">Yönetici notu</h3>
               <p className="mt-2 whitespace-pre-wrap text-slate-700">
                 {request.adminNote || "Yönetici notu eklenmedi."}
               </p>

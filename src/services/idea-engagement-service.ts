@@ -1,7 +1,6 @@
 import "client-only";
 
 import { IDEA_STAGES } from "@/constants/idea-stages";
-import { LEADERBOARD_POINTS } from "@/constants/leaderboard";
 import { SUPPORT_TYPES } from "@/constants/support-types";
 import { auth } from "@/lib/firebase/auth";
 import { db } from "@/lib/firebase/firestore";
@@ -10,7 +9,6 @@ import {
   getFirebaseErrorMessage,
 } from "@/lib/firebase/firebase-error";
 import { createNotification } from "@/services/notification-service";
-import { applyScoreInTransaction } from "@/services/leaderboard-service";
 import type {
   FavoriteIdeaItem,
   IdeaEngagementState,
@@ -20,6 +18,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  limit,
   onSnapshot,
   query,
   runTransaction,
@@ -85,6 +84,29 @@ function logEngagementReadError(
     ideaId,
     userId,
     code: getFirebaseErrorCode(error) ?? "firestore/unknown",
+    message:
+      error instanceof Error ? error.message : getFirebaseErrorMessage(error),
+    name: error instanceof Error ? error.name : "UnknownError",
+    stack: error instanceof Error ? error.stack : undefined,
+    error,
+  });
+}
+
+function logEngagementActionError(
+  action: "toggle-like" | "toggle-favorite",
+  ideaId: string,
+  userId: string,
+  error: unknown,
+): void {
+  console.error("[idea-engagement] Firestore action failed", {
+    action,
+    ideaId,
+    userId,
+    code: getFirebaseErrorCode(error) ?? "firestore/unknown",
+    message:
+      error instanceof Error ? error.message : getFirebaseErrorMessage(error),
+    name: error instanceof Error ? error.name : "UnknownError",
+    stack: error instanceof Error ? error.stack : undefined,
     error,
   });
 }
@@ -209,6 +231,21 @@ export async function toggleIdeaLike(
       "likes",
       engagementDocumentId(ideaId, userId),
     );
+    console.info("[idea-engagement] Firestore query", {
+      operation: "list",
+      collection: "likes",
+      path: "likes",
+      filters: { ideaId, userId },
+    });
+    const existingLikes = await getDocs(
+      query(
+        collection(db, "likes"),
+        where("ideaId", "==", ideaId),
+        where("userId", "==", userId),
+        limit(1),
+      ),
+    );
+    const shouldCreateLike = existingLikes.empty;
     const result = await runTransaction(db, async (transaction) => {
       const idea = await transaction.get(ideaReference);
       if (!idea.exists() || idea.data().status !== "approved") {
@@ -216,44 +253,48 @@ export async function toggleIdeaLike(
       }
       const ownerId =
         typeof idea.data().studentId === "string" ? idea.data().studentId : "";
-      const like = await transaction.get(likeReference);
-      const scoreEvent = await transaction.get(
-        doc(db, "scoreEvents", `like__${likeReference.id}`),
-      );
-      const owner = ownerId
-        ? await transaction.get(doc(db, "users", ownerId))
-        : null;
 
       const rawCount: unknown = idea.data().likeCount;
       const currentCount =
         typeof rawCount === "number" && Number.isFinite(rawCount)
           ? Math.max(0, rawCount)
           : 0;
-      const isLiked = !like.exists();
+      const isLiked = shouldCreateLike;
       const likeCount = Math.max(0, currentCount + (isLiked ? 1 : -1));
 
       if (isLiked) {
-        transaction.set(likeReference, {
+        const likePayload = {
           id: likeReference.id,
           ideaId,
           userId,
           createdAt: serverTimestamp(),
+        };
+        console.info("[idea-engagement] Firestore write", {
+          operation: "create",
+          collection: "likes",
+          path: likeReference.path,
+          documentId: likeReference.id,
+          payload: likePayload,
         });
+        transaction.set(likeReference, likePayload);
       } else {
+        console.info("[idea-engagement] Firestore write", {
+          operation: "delete",
+          collection: "likes",
+          path: likeReference.path,
+          documentId: likeReference.id,
+          payload: null,
+        });
         transaction.delete(likeReference);
       }
+      console.info("[idea-engagement] Firestore write", {
+        operation: "update",
+        collection: "ideas",
+        path: ideaReference.path,
+        documentId: ideaReference.id,
+        payload: { likeCount },
+      });
       transaction.update(ideaReference, { likeCount });
-      if (owner?.exists() && (isLiked || scoreEvent.exists())) {
-        applyScoreInTransaction(
-          transaction,
-          owner,
-          "like",
-          likeReference.id,
-          isLiked
-            ? LEADERBOARD_POINTS.likeReceived
-            : -LEADERBOARD_POINTS.likeReceived,
-        );
-      }
       return {
         isLiked,
         likeCount,
@@ -293,6 +334,7 @@ export async function toggleIdeaLike(
     ) {
       return messageFailure("Beğenilebilecek hayal bulunamadı.");
     }
+    logEngagementActionError("toggle-like", ideaId, userId, error);
     return failure(error);
   }
 }
@@ -311,26 +353,53 @@ export async function toggleIdeaFavorite(
       "favorites",
       engagementDocumentId(ideaId, userId),
     );
+    console.info("[idea-engagement] Firestore query", {
+      operation: "list",
+      collection: "favorites",
+      path: "favorites",
+      filters: { ideaId, userId },
+    });
+    const existingFavorites = await getDocs(
+      query(
+        collection(db, "favorites"),
+        where("ideaId", "==", ideaId),
+        where("userId", "==", userId),
+        limit(1),
+      ),
+    );
+    const shouldCreateFavorite = existingFavorites.empty;
     const isFavorite = await runTransaction(db, async (transaction) => {
-      const [idea, favorite] = await Promise.all([
-        transaction.get(ideaReference),
-        transaction.get(favoriteReference),
-      ]);
+      const idea = await transaction.get(ideaReference);
       if (!idea.exists() || idea.data().status !== "approved") {
         throw new Error("engagement/idea-not-available");
       }
 
-      if (favorite.exists()) {
+      if (!shouldCreateFavorite) {
+        console.info("[idea-engagement] Firestore write", {
+          operation: "delete",
+          collection: "favorites",
+          path: favoriteReference.path,
+          documentId: favoriteReference.id,
+          payload: null,
+        });
         transaction.delete(favoriteReference);
         return false;
       }
 
-      transaction.set(favoriteReference, {
+      const favoritePayload = {
         id: favoriteReference.id,
         ideaId,
         userId,
         createdAt: serverTimestamp(),
+      };
+      console.info("[idea-engagement] Firestore write", {
+        operation: "create",
+        collection: "favorites",
+        path: favoriteReference.path,
+        documentId: favoriteReference.id,
+        payload: favoritePayload,
       });
+      transaction.set(favoriteReference, favoritePayload);
       return true;
     });
     return { success: true, data: { isFavorite } };
@@ -341,6 +410,7 @@ export async function toggleIdeaFavorite(
     ) {
       return messageFailure("Favorilere eklenebilecek hayal bulunamadı.");
     }
+    logEngagementActionError("toggle-favorite", ideaId, userId, error);
     return failure(error);
   }
 }

@@ -59,15 +59,13 @@ export function IdeaEngagement({
   async function toggleLike() {
     if (action || !requireUser()) return;
 
+    console.info("[idea-engagement-ui] Like button clicked", {
+      ideaId,
+      userId: user?.id ?? null,
+      currentIsLiked: state.isLiked,
+    });
     setAction("like");
     setFeedback(null);
-    const previous = state;
-    const optimisticLiked = !state.isLiked;
-    setState({
-      ...state,
-      isLiked: optimisticLiked,
-      likeCount: Math.max(0, state.likeCount + (optimisticLiked ? 1 : -1)),
-    });
 
     const result = await toggleIdeaLike(ideaId);
     if (result.success) {
@@ -83,7 +81,6 @@ export function IdeaEngagement({
           : "Beğeni geri alındı.",
       });
     } else {
-      setState(previous);
       setFeedback({ type: "error", message: result.error.message });
     }
     setAction(null);
@@ -92,10 +89,13 @@ export function IdeaEngagement({
   async function toggleFavorite() {
     if (action || !requireUser()) return;
 
+    console.info("[idea-engagement-ui] Favorite button clicked", {
+      ideaId,
+      userId: user?.id ?? null,
+      currentIsFavorite: state.isFavorite,
+    });
     setAction("favorite");
     setFeedback(null);
-    const previous = state;
-    setState({ ...state, isFavorite: !state.isFavorite });
 
     const result = await toggleIdeaFavorite(ideaId);
     if (result.success) {
@@ -110,7 +110,6 @@ export function IdeaEngagement({
           : "Hayal favorilerden çıkarıldı.",
       });
     } else {
-      setState(previous);
       setFeedback({ type: "error", message: result.error.message });
     }
     setAction(null);
@@ -141,7 +140,7 @@ export function IdeaEngagement({
   }
 
   return (
-    <div className="mt-7">
+    <div className="mt-7" translate="no">
       <div
         className="grid gap-2 sm:flex sm:flex-wrap"
         aria-label="Hayal etkileşimleri"
@@ -156,15 +155,21 @@ export function IdeaEngagement({
           }`}
           onClick={() => void toggleLike()}
         >
-          {action === "like" ? (
-            <LoaderCircle aria-hidden="true" className="size-4 animate-spin" />
-          ) : (
+          <span className="relative size-4 shrink-0" aria-hidden="true">
             <Heart
-              aria-hidden="true"
-              className={`size-4 ${state.isLiked ? "fill-current" : ""}`}
+              className={`absolute inset-0 size-4 ${
+                state.isLiked ? "fill-current" : ""
+              } ${action === "like" ? "invisible" : "visible"}`}
             />
-          )}
-          {state.likeCount} Beğeni
+            <LoaderCircle
+              className={`absolute inset-0 size-4 animate-spin ${
+                action === "like" ? "visible" : "invisible"
+              }`}
+            />
+          </span>
+          <span>
+            <span>{state.likeCount}</span> <span>Beğeni</span>
+          </span>
         </Button>
         <Button
           variant={state.isFavorite ? "primary" : "secondary"}
@@ -178,15 +183,19 @@ export function IdeaEngagement({
           }
           onClick={() => void toggleFavorite()}
         >
-          {action === "favorite" ? (
-            <LoaderCircle aria-hidden="true" className="size-4 animate-spin" />
-          ) : (
+          <span className="relative size-4 shrink-0" aria-hidden="true">
             <Bookmark
-              aria-hidden="true"
-              className={`size-4 ${state.isFavorite ? "fill-current" : ""}`}
+              className={`absolute inset-0 size-4 ${
+                state.isFavorite ? "fill-current" : ""
+              } ${action === "favorite" ? "invisible" : "visible"}`}
             />
-          )}
-          {state.isFavorite ? "Favorilerimde" : "Favoriye Ekle"}
+            <LoaderCircle
+              className={`absolute inset-0 size-4 animate-spin ${
+                action === "favorite" ? "visible" : "invisible"
+              }`}
+            />
+          </span>
+          <span>{state.isFavorite ? "Favorilerimde" : "Favoriye Ekle"}</span>
         </Button>
         <Button
           variant="secondary"
@@ -194,26 +203,34 @@ export function IdeaEngagement({
           aria-label="Hayali paylaş"
           onClick={() => void shareIdea()}
         >
-          {shared ? (
-            <Check aria-hidden="true" className="size-4 text-emerald-700" />
-          ) : (
-            <Share2 aria-hidden="true" className="size-4" />
-          )}
-          {shared ? "Bağlantı Kopyalandı" : "Paylaş"}
+          <span className="relative size-4 shrink-0" aria-hidden="true">
+            <Share2
+              className={`absolute inset-0 size-4 ${
+                shared ? "invisible" : "visible"
+              }`}
+            />
+            <Check
+              className={`absolute inset-0 size-4 text-emerald-700 ${
+                shared ? "visible" : "invisible"
+              }`}
+            />
+          </span>
+          <span>{shared ? "Bağlantı Kopyalandı" : "Paylaş"}</span>
         </Button>
       </div>
-      {feedback && (
-        <p
-          className={`mt-3 rounded-xl px-4 py-3 text-sm font-medium ${
-            feedback.type === "success"
+      <p
+        className={`mt-3 rounded-xl px-4 py-3 text-sm font-medium ${
+          feedback === null
+            ? "hidden"
+            : feedback.type === "success"
               ? "bg-emerald-50 text-emerald-800"
               : "bg-red-50 text-red-800"
-          }`}
-          role={feedback.type === "error" ? "alert" : "status"}
-        >
-          {feedback.message}
-        </p>
-      )}
+        }`}
+        role={feedback?.type === "error" ? "alert" : "status"}
+        aria-live={feedback?.type === "error" ? "assertive" : "polite"}
+      >
+        <span>{feedback?.message ?? ""}</span>
+      </p>
     </div>
   );
 }
