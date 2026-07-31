@@ -90,6 +90,14 @@ const requestSchema = z.object({
   message: z.string(),
   contactPreference: z.enum(CONTACT_PREFERENCES).default("platform"),
   contributionDetails: z.string().nullable().default(null),
+  sponsorshipOffer: z
+    .object({
+      estimatedBudget: z.string(),
+      resources: z.string(),
+      duration: z.string(),
+    })
+    .nullable()
+    .default(null),
   status: z.enum(SUPPORT_REQUEST_STATUSES),
   adminNote: z.string().nullable(),
   reviewedBy: z.string().nullable(),
@@ -230,6 +238,7 @@ export async function createSupportRequest(
         where("supporterId", "==", supporterId),
         where("ideaId", "==", validation.data.ideaId),
         where("applicationType", "==", applicationType),
+        where("status", "in", ["pending", "approved"]),
         limit(1),
       ),
     );
@@ -239,11 +248,14 @@ export async function createSupportRequest(
       );
     }
 
-    const reference = doc(
-      db,
-      "supportRequests",
-      `${supporterId}__${validation.data.ideaId}__${applicationType}`,
-    );
+    const reference =
+      applicationType === "sponsorship"
+        ? doc(collection(db, "supportRequests"))
+        : doc(
+            db,
+            "supportRequests",
+            `${supporterId}__${validation.data.ideaId}__${applicationType}`,
+          );
     await runTransaction(db, async (transaction) => {
       const [transactionProfile, transactionIdea, existingRequest] =
         await Promise.all([
@@ -271,6 +283,7 @@ export async function createSupportRequest(
         message: validation.data.message,
         contactPreference: validation.data.contactPreference,
         contributionDetails: validation.data.contributionDetails,
+        sponsorshipOffer: validation.data.sponsorshipOffer,
         status: "pending",
         adminNote: "",
         reviewedBy: null,

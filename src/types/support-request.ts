@@ -16,6 +16,12 @@ export type SupportApplicationType = (typeof SUPPORT_APPLICATION_TYPES)[number];
 export const CONTACT_PREFERENCES = ["platform", "email", "phone"] as const;
 export type ContactPreference = (typeof CONTACT_PREFERENCES)[number];
 
+export interface SponsorshipOfferDetails {
+  estimatedBudget: string;
+  resources: string;
+  duration: string;
+}
+
 export interface SupportRequest extends BaseEntity {
   ideaId: EntityId;
   supporterId: EntityId;
@@ -25,6 +31,7 @@ export interface SupportRequest extends BaseEntity {
   message: string;
   contactPreference: ContactPreference;
   contributionDetails: Nullable<string>;
+  sponsorshipOffer: Nullable<SponsorshipOfferDetails>;
   status: SupportRequestStatus;
   adminNote: Nullable<string>;
   reviewedBy: Nullable<EntityId>;
@@ -38,6 +45,7 @@ export interface CreateSupportRequestInput {
   message: string;
   contactPreference: ContactPreference;
   contributionDetails: Nullable<string>;
+  sponsorshipOffer: Nullable<SponsorshipOfferDetails>;
 }
 
 export interface SupportRequestListItem {
@@ -50,6 +58,7 @@ export interface SupportRequestListItem {
   message: string;
   contactPreference: ContactPreference;
   contributionDetails: Nullable<string>;
+  sponsorshipOffer: Nullable<SponsorshipOfferDetails>;
   status: SupportRequestStatus;
   createdAt: ISODateString;
 }

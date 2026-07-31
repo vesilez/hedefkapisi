@@ -658,7 +658,7 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly([
           "id", "ideaId", "supporterId", "supportTypes", "applicationType",
           "applicantRole", "message", "contactPreference",
-          "contributionDetails", "status", "adminNote", "reviewedBy",
+          "contributionDetails", "sponsorshipOffer", "status", "adminNote", "reviewedBy",
           "reviewedAt", "createdAt", "updatedAt"
         ])
         && request.resource.data.id == requestId
@@ -679,6 +679,22 @@ service cloud.firestore {
         )
         && request.resource.data.contactPreference in ["platform", "email", "phone"]
         && validOptionalText(request.resource.data.contributionDetails, 1000)
+        && (
+          (
+            request.resource.data.applicationType == "sponsorship"
+            && request.resource.data.sponsorshipOffer is map
+            && request.resource.data.sponsorshipOffer.keys().hasOnly([
+              "estimatedBudget", "resources", "duration"
+            ])
+            && safeUserText(request.resource.data.sponsorshipOffer.estimatedBudget, 1, 120)
+            && safeUserText(request.resource.data.sponsorshipOffer.resources, 10, 1500)
+            && safeUserText(request.resource.data.sponsorshipOffer.duration, 2, 200)
+          )
+          || (
+            request.resource.data.applicationType != "sponsorship"
+            && request.resource.data.sponsorshipOffer == null
+          )
+        )
         && request.resource.data.supportTypes is list
         && request.resource.data.supportTypes.size() >= 1
         && request.resource.data.supportTypes.size() <= 4

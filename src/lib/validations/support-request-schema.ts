@@ -13,31 +13,52 @@ import {
 const uniqueValues = (values: readonly string[]) =>
   new Set(values).size === values.length;
 
-export const createSupportRequestSchema = z.object({
-  ideaId: entityIdSchema,
-  applicationType: z.enum(SUPPORT_APPLICATION_TYPES),
-  supportTypes: z
-    .array(z.enum(SUPPORT_TYPES))
-    .min(1, "En az bir destek türü seçin.")
-    .max(4, "En fazla 4 destek türü seçebilirsiniz.")
-    .refine(uniqueValues, "Destek türleri tekrar eden değer içeremez.")
-    .refine(
-      (values) =>
-        values.every((value) =>
-          value === "financial" ? true : SUPPORT_TYPE_MVP_ENABLED[value],
-        ),
-      "Geçersiz destek türü.",
-    ),
-  message: safeText()
-    .trim()
-    .min(20, "Mesaj en az 20 karakter olmalıdır.")
-    .max(1500, "Mesaj en fazla 1500 karakter olabilir."),
-  contactPreference: z.enum(CONTACT_PREFERENCES),
-  contributionDetails: safeText()
-    .trim()
-    .max(1000, "Bütçe veya katkı açıklaması en fazla 1000 karakter olabilir.")
-    .nullable(),
-});
+export const createSupportRequestSchema = z
+  .object({
+    ideaId: entityIdSchema,
+    applicationType: z.enum(SUPPORT_APPLICATION_TYPES),
+    supportTypes: z
+      .array(z.enum(SUPPORT_TYPES))
+      .min(1, "En az bir destek türü seçin.")
+      .max(4, "En fazla 4 destek türü seçebilirsiniz.")
+      .refine(uniqueValues, "Destek türleri tekrar eden değer içeremez.")
+      .refine(
+        (values) =>
+          values.every((value) =>
+            value === "financial" ? true : SUPPORT_TYPE_MVP_ENABLED[value],
+          ),
+        "Geçersiz destek türü.",
+      ),
+    message: safeText()
+      .trim()
+      .min(20, "Açıklama en az 20 karakter olmalıdır.")
+      .max(1500, "Açıklama en fazla 1500 karakter olabilir."),
+    contactPreference: z.enum(CONTACT_PREFERENCES),
+    contributionDetails: safeText().trim().max(1000).nullable(),
+    sponsorshipOffer: z
+      .object({
+        estimatedBudget: safeText().trim().min(1).max(120),
+        resources: safeText().trim().min(10).max(1500),
+        duration: safeText().trim().min(2).max(200),
+      })
+      .nullable(),
+  })
+  .superRefine((value, context) => {
+    if (value.applicationType === "sponsorship" && !value.sponsorshipOffer) {
+      context.addIssue({
+        code: "custom",
+        path: ["sponsorshipOffer"],
+        message: "Sponsorluk teklifi bilgileri eksik.",
+      });
+    }
+    if (value.applicationType !== "sponsorship" && value.sponsorshipOffer) {
+      context.addIssue({
+        code: "custom",
+        path: ["sponsorshipOffer"],
+        message: "Sponsorluk bilgileri bu başvuru türünde kullanılamaz.",
+      });
+    }
+  });
 
 export type CreateSupportRequestSchemaInput = z.infer<
   typeof createSupportRequestSchema

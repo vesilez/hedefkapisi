@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -61,6 +62,9 @@ export function SupportRequestForm({ ideaId }: { ideaId: string }) {
   const [contactPreference, setContactPreference] =
     useState<ContactPreference>("platform");
   const [contributionDetails, setContributionDetails] = useState("");
+  const [estimatedBudget, setEstimatedBudget] = useState("");
+  const [resources, setResources] = useState("");
+  const [duration, setDuration] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -115,6 +119,10 @@ export function SupportRequestForm({ ideaId }: { ideaId: string }) {
       message,
       contactPreference,
       contributionDetails: contributionDetails.trim() || null,
+      sponsorshipOffer:
+        eligibleRole === "sponsor"
+          ? { estimatedBudget, resources, duration }
+          : null,
     });
     if (!validation.success) {
       setError(
@@ -304,8 +312,69 @@ export function SupportRequestForm({ ideaId }: { ideaId: string }) {
               </p>
             </div>
 
+            {eligibleRole === "sponsor" && (
+              <div className="mt-6 grid gap-5 sm:grid-cols-2">
+                <div>
+                  <label
+                    htmlFor={`estimated-budget-${ideaId}`}
+                    className="font-semibold text-slate-900"
+                  >
+                    Tahmini bütçe
+                  </label>
+                  <Input
+                    id={`estimated-budget-${ideaId}`}
+                    className="mt-2"
+                    value={estimatedBudget}
+                    maxLength={120}
+                    required
+                    disabled={submitting}
+                    placeholder="Örn. 100.000 TL veya ayni destek"
+                    onChange={(event) => setEstimatedBudget(event.target.value)}
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor={`offer-duration-${ideaId}`}
+                    className="font-semibold text-slate-900"
+                  >
+                    Süre veya tarih aralığı
+                  </label>
+                  <Input
+                    id={`offer-duration-${ideaId}`}
+                    className="mt-2"
+                    value={duration}
+                    maxLength={200}
+                    required
+                    disabled={submitting}
+                    placeholder="Örn. Eylül-Aralık 2026"
+                    onChange={(event) => setDuration(event.target.value)}
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label
+                    htmlFor={`offer-resources-${ideaId}`}
+                    className="font-semibold text-slate-900"
+                  >
+                    Sağlanacak kaynaklar
+                  </label>
+                  <Textarea
+                    id={`offer-resources-${ideaId}`}
+                    className="mt-2 bg-white"
+                    value={resources}
+                    minLength={10}
+                    maxLength={1500}
+                    required
+                    disabled={submitting}
+                    placeholder="Finansman, ekipman, uzman, mekân veya diğer kaynaklar"
+                    onChange={(event) => setResources(event.target.value)}
+                  />
+                </div>
+              </div>
+            )}
+
             <div className="mt-6 grid gap-5 sm:grid-cols-2">
-              <div>
+              {eligibleRole !== "sponsor" && (
+                <div>
                 <label
                   htmlFor={`contact-preference-${ideaId}`}
                   className="font-semibold text-slate-900"
@@ -327,7 +396,8 @@ export function SupportRequestForm({ ideaId }: { ideaId: string }) {
                   <option value="email">E-posta</option>
                   <option value="phone">Telefon</option>
                 </Select>
-              </div>
+                </div>
+              )}
               <div>
                 <label
                   htmlFor={`contribution-details-${ideaId}`}

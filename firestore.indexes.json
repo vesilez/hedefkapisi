@@ -64,7 +64,8 @@
       "fields": [
         { "fieldPath": "supporterId", "order": "ASCENDING" },
         { "fieldPath": "ideaId", "order": "ASCENDING" },
-        { "fieldPath": "applicationType", "order": "ASCENDING" }
+        { "fieldPath": "applicationType", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
       ]
     },
     {

@@ -13,6 +13,7 @@ import {
 import { exportCsv } from "@/lib/utils/export-csv";
 import { isAdminRole } from "@/constants/roles";
 import type { SupportRequestStatus } from "@/constants/support-request-statuses";
+import type { SupportApplicationType } from "@/types/support-request";
 import { useAuth } from "@/hooks/use-auth";
 import {
   getAdminSupportRequests,
@@ -36,6 +37,9 @@ export function SupportRequestList() {
   const [requests, setRequests] = useState<AdminSupportRequestListItem[]>([]);
   const [statusFilter, setStatusFilter] = useState<
     SupportRequestStatus | "all"
+  >("all");
+  const [typeFilter, setTypeFilter] = useState<
+    SupportApplicationType | "all"
   >("all");
   const [feedback, setFeedback] = useState<{
     type: "success" | "error";
@@ -128,6 +132,8 @@ export function SupportRequestList() {
       .filter(
         (item) =>
           (statusFilter === "all" || item.request.status === statusFilter) &&
+          (typeFilter === "all" ||
+            item.request.applicationType === typeFilter) &&
           (!term ||
             item.applicantName.toLocaleLowerCase("tr-TR").includes(term) ||
             item.applicantEmail.toLocaleLowerCase("tr-TR").includes(term) ||
@@ -138,7 +144,7 @@ export function SupportRequestList() {
           ? first.request.createdAt.localeCompare(second.request.createdAt)
           : second.request.createdAt.localeCompare(first.request.createdAt),
       );
-  }, [requests, search, sort, statusFilter]);
+  }, [requests, search, sort, statusFilter, typeFilter]);
   const safePage = Math.min(page, Math.max(1, Math.ceil(filteredRequests.length / pageSize)));
   const pageRequests = filteredRequests.slice((safePage - 1) * pageSize, safePage * pageSize);
   const closeToast = useCallback(() => setFeedback(null), []);
@@ -207,7 +213,7 @@ export function SupportRequestList() {
         onCancel={() => setBulkAction(null)}
         onConfirm={() => void runBulkAction()}
       />
-      <div className="mb-6 grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-2 xl:grid-cols-4">
+      <div className="mb-6 grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-2 xl:grid-cols-5">
         <label className="relative md:col-span-2">
           <span className="sr-only">Başvuru ara</span>
           <Search aria-hidden="true" className="absolute left-3 top-3.5 size-4 text-slate-400" />
@@ -232,6 +238,20 @@ export function SupportRequestList() {
           <option value="rejected">Reddedildi</option>
         </Select>
         </div>
+        <Select
+          aria-label="Başvuru türüne göre filtrele"
+          value={typeFilter}
+          onChange={(event) =>
+            setTypeFilter(
+              event.target.value as SupportApplicationType | "all",
+            )
+          }
+        >
+          <option value="all">Tüm başvuru türleri</option>
+          <option value="support">Destek</option>
+          <option value="mentorship">Mentorluk</option>
+          <option value="sponsorship">Sponsorluk teklifleri</option>
+        </Select>
         <Select aria-label="Başvuruları sırala" value={sort} onChange={(event) => setSort(event.target.value as typeof sort)}>
           <option value="newest">En yeni</option>
           <option value="oldest">En eski</option>
