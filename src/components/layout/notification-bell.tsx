@@ -98,6 +98,9 @@ export function NotificationBell({ userId }: { userId: string }) {
     <details
       ref={detailsRef}
       className="relative"
+      onToggle={(event) => {
+        if (event.currentTarget.open) void markAll();
+      }}
       onKeyDown={(event) => {
         if (event.key === "Escape" && detailsRef.current) {
           detailsRef.current.open = false;
@@ -134,7 +137,7 @@ export function NotificationBell({ userId }: { userId: string }) {
             ) : (
               <CheckCheck aria-hidden="true" className="size-3.5" />
             )}
-            Tümünü okundu yap
+            Tümünü okundu işaretle
           </button>
         </div>
 
@@ -182,9 +185,7 @@ export function NotificationBell({ userId }: { userId: string }) {
                     className={`mt-1.5 size-2 shrink-0 rounded-full ${
                       notification.isRead ? "bg-slate-300" : "bg-blue-600"
                     }`}
-                    aria-label={
-                      notification.isRead ? "Okundu" : "Okunmadı"
-                    }
+                    aria-label={notification.isRead ? "Okundu" : "Okunmadı"}
                   />
                   <div className="min-w-0 flex-1">
                     <h3 className="text-sm font-semibold text-slate-950">
