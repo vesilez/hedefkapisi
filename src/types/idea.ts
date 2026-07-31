@@ -95,7 +95,7 @@ export interface PublicIdeaDetail {
   city: Nullable<string>;
   stage: IdeaStage;
   supportNeeds: SupportType[];
-  visibility: Exclude<IdeaVisibility, "private">;
+  visibility: IdeaVisibility;
   isFeatured: boolean;
   supportCount: number;
   likeCount: number;

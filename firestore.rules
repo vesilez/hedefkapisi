@@ -640,10 +640,7 @@ service cloud.firestore {
           && request.resource.data.moderatedBy == request.auth.uid;
       }
 
-      allow read: if (
-          resource.data.status == "approved"
-          && resource.data.visibility in ["public", "anonymous"]
-        )
+      allow read: if resource.data.status == "approved"
         || isOwner()
         || isAdmin();
       allow create: if validOwnerCreate();

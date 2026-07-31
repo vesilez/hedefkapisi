@@ -137,7 +137,7 @@ const ideaListItemSchema = z.object({
   city: z.string().nullable(),
   stage: ideaFormSchema.shape.stage,
   supportNeeds: ideaFormSchema.shape.supportNeeds,
-  visibility: z.enum(["public", "anonymous"]),
+  visibility: z.enum(IDEA_VISIBILITIES),
   isFeatured: z.boolean(),
   supportCount: z.number(),
   likeCount: z.number().int().nonnegative().optional().default(0),
@@ -549,31 +549,15 @@ export async function getPublicIdeas(
   filters: PublicIdeaFilters = {},
 ): Promise<IdeaServiceResult<IdeaListItem[]>> {
   try {
-    const [snapshots, comments] = await Promise.all([
-      getDocs(
-        query(
-          collection(db, "ideas"),
-          where("status", "==", "approved"),
-          where("visibility", "in", ["public", "anonymous"]),
-        ),
-      ),
-      getDocs(
-        query(collection(db, "comments"), where("status", "==", "active")),
-      ),
-    ]);
+    const snapshots = await getDocs(
+      query(collection(db, "ideas"), where("status", "==", "approved")),
+    );
 
     const ideas: IdeaListItem[] = [];
-    const commentCounts = new Map<string, number>();
-    for (const comment of comments.docs) {
-      const ideaId: unknown = comment.data().ideaId;
-      if (typeof ideaId !== "string") continue;
-      commentCounts.set(ideaId, (commentCounts.get(ideaId) ?? 0) + 1);
-    }
-
     for (const snapshot of snapshots.docs) {
       const parsed = ideaListItemSchema.safeParse({
         ...snapshot.data(),
-        commentCount: commentCounts.get(snapshot.id) ?? 0,
+        id: snapshot.id,
       });
       if (!parsed.success) {
         return validationFailure("Hayal verileri okunamadı.");
@@ -701,23 +685,24 @@ export async function getAdminIdeaStatistics(
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const [total, pending, approved, addedLastSevenDays, addedLastThirtyDays] = await Promise.all([
-      getCountFromServer(ideas),
-      getCountFromServer(query(ideas, where("status", "==", "pending"))),
-      getCountFromServer(query(ideas, where("status", "==", "approved"))),
-      getCountFromServer(
-        query(
-          ideas,
-          where("createdAt", ">=", Timestamp.fromDate(sevenDaysAgo)),
+    const [total, pending, approved, addedLastSevenDays, addedLastThirtyDays] =
+      await Promise.all([
+        getCountFromServer(ideas),
+        getCountFromServer(query(ideas, where("status", "==", "pending"))),
+        getCountFromServer(query(ideas, where("status", "==", "approved"))),
+        getCountFromServer(
+          query(
+            ideas,
+            where("createdAt", ">=", Timestamp.fromDate(sevenDaysAgo)),
+          ),
         ),
-      ),
-      getCountFromServer(
-        query(
-          ideas,
-          where("createdAt", ">=", Timestamp.fromDate(thirtyDaysAgo)),
+        getCountFromServer(
+          query(
+            ideas,
+            where("createdAt", ">=", Timestamp.fromDate(thirtyDaysAgo)),
+          ),
         ),
-      ),
-    ]);
+      ]);
 
     return {
       success: true,

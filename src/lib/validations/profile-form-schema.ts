@@ -1,4 +1,4 @@
-import type { PublicRegisterRole } from "./auth-schema";
+import { PUBLIC_REGISTER_ROLES, type PublicRegisterRole } from "./auth-schema";
 import {
   baseUserProfileSchema,
   mentorProfileSchema,
@@ -10,8 +10,6 @@ import { z } from "zod";
 const commonProfileFormSchema = baseUserProfileSchema
   .pick({ name: true, surname: true, email: true, phone: true, city: true })
   .extend({ bio: studentProfileSchema.shape.bio });
-
-const PROFILE_FORM_ROLES = ["student", "supporter", "mentor"] as const;
 
 const studentProfileFormSchema = commonProfileFormSchema.extend({
   role: z.literal("student"),
@@ -54,7 +52,7 @@ const roleProfileFormSchema = z.discriminatedUnion("role", [
 ]);
 
 const rawProfileFormSchema = commonProfileFormSchema.extend({
-  role: z.enum(PROFILE_FORM_ROLES),
+  role: z.enum(PUBLIC_REGISTER_ROLES),
   schoolType: z.string().optional(),
   schoolName: z.string().optional(),
   department: z.string().nullable().optional(),
@@ -92,8 +90,11 @@ export const profileFormSchema = rawProfileFormSchema.transform(
 export type ProfileFormInput = z.input<typeof profileFormSchema>;
 export type ProfileFormValues = z.output<typeof profileFormSchema>;
 
-export function isProfileRole(
-  role: string,
-): role is Exclude<PublicRegisterRole, "sponsor"> {
-  return role === "student" || role === "supporter" || role === "mentor";
+export function isProfileRole(role: string): role is PublicRegisterRole {
+  return (
+    role === "student" ||
+    role === "supporter" ||
+    role === "mentor" ||
+    role === "admin"
+  );
 }

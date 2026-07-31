@@ -46,7 +46,7 @@ const publicIdeaSchema = z.object({
   city: z.string().nullable(),
   stage: z.enum(IDEA_STAGES),
   supportNeeds: z.array(z.enum(SUPPORT_TYPES)),
-  visibility: z.enum(["public", "anonymous"]),
+  visibility: z.enum(["public", "anonymous", "private"]),
   isFeatured: z.boolean(),
   supportCount: z.number(),
   likeCount: z.number().int().nonnegative().optional().default(0),
@@ -70,7 +70,6 @@ export async function getPublicIdeaBySlug(
         collection(db, "ideas"),
         where("slug", "==", normalizedSlug),
         where("status", "==", "approved"),
-        where("visibility", "in", ["public", "anonymous"]),
         limit(1),
       ),
     );
@@ -88,6 +87,7 @@ export async function getPublicIdeaBySlug(
     );
     const parsed = publicIdeaSchema.safeParse({
       ...snapshot.data(),
+      id: snapshot.id,
       commentCount: commentCount.data().count,
     });
     if (!parsed.success) {
