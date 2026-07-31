@@ -27,7 +27,8 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { SupportRequestCard } from "./support-request-card";
 
-type ViewState = "loading" | "ready" | "forbidden" | "profile-error" | "list-error";
+type ViewState =
+  "loading" | "ready" | "forbidden" | "profile-error" | "list-error";
 
 export function SupportRequestList() {
   const router = useRouter();
@@ -38,9 +39,9 @@ export function SupportRequestList() {
   const [statusFilter, setStatusFilter] = useState<
     SupportRequestStatus | "all"
   >("all");
-  const [typeFilter, setTypeFilter] = useState<
-    SupportApplicationType | "all"
-  >("all");
+  const [typeFilter, setTypeFilter] = useState<SupportApplicationType | "all">(
+    "all",
+  );
   const [feedback, setFeedback] = useState<{
     type: "success" | "error";
     message: string;
@@ -49,7 +50,9 @@ export function SupportRequestList() {
   const [sort, setSort] = useState<"newest" | "oldest">("newest");
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [bulkAction, setBulkAction] = useState<"approve" | "reject" | null>(null);
+  const [bulkAction, setBulkAction] = useState<"approve" | "reject" | null>(
+    null,
+  );
   const [bulkBusy, setBulkBusy] = useState(false);
   const pageSize = 8;
 
@@ -145,8 +148,14 @@ export function SupportRequestList() {
           : second.request.createdAt.localeCompare(first.request.createdAt),
       );
   }, [requests, search, sort, statusFilter, typeFilter]);
-  const safePage = Math.min(page, Math.max(1, Math.ceil(filteredRequests.length / pageSize)));
-  const pageRequests = filteredRequests.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const safePage = Math.min(
+    page,
+    Math.max(1, Math.ceil(filteredRequests.length / pageSize)),
+  );
+  const pageRequests = filteredRequests.slice(
+    (safePage - 1) * pageSize,
+    safePage * pageSize,
+  );
   const closeToast = useCallback(() => setFeedback(null), []);
 
   async function runBulkAction() {
@@ -160,8 +169,16 @@ export function SupportRequestList() {
     for (const requestId of ids) {
       const result =
         action === "approve"
-          ? await approveSupportRequest(requestId, user.id, "Toplu yönetici onayı.")
-          : await rejectSupportRequest(requestId, user.id, "Toplu yönetici reddi.");
+          ? await approveSupportRequest(
+              requestId,
+              user.id,
+              "Toplu yönetici onayı.",
+            )
+          : await rejectSupportRequest(
+              requestId,
+              user.id,
+              "Toplu yönetici reddi.",
+            );
       if (result.success) {
         completed += 1;
         successfulIds.add(requestId);
@@ -171,7 +188,14 @@ export function SupportRequestList() {
     setRequests((current) =>
       current.map((item) =>
         successfulIds.has(item.request.id)
-          ? { ...item, request: { ...item.request, status, adminNote: `Toplu yönetici ${action === "approve" ? "onayı" : "reddi"}.` } }
+          ? {
+              ...item,
+              request: {
+                ...item.request,
+                status,
+                adminNote: `Toplu yönetici ${action === "approve" ? "onayı" : "reddi"}.`,
+              },
+            }
           : item,
       ),
     );
@@ -185,18 +209,42 @@ export function SupportRequestList() {
     });
   }
 
-  if (authLoading || state === "loading" || (user && checkedUserId !== user.id)) {
-    return <div className="flex min-h-52 items-center justify-center rounded-2xl bg-white"><LoadingSpinner label="Destek başvuruları yükleniyor..." /></div>;
+  if (
+    authLoading ||
+    state === "loading" ||
+    (user && checkedUserId !== user.id)
+  ) {
+    return (
+      <div className="flex min-h-52 items-center justify-center rounded-2xl bg-white">
+        <LoadingSpinner label="Destek başvuruları yükleniyor..." />
+      </div>
+    );
   }
   if (!user) return null;
   if (state === "forbidden") {
-    return <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-red-800" role="alert">Bu alana erişim yetkin yok.</div>;
+    return (
+      <div
+        className="rounded-2xl border border-red-200 bg-red-50 p-6 text-red-800"
+        role="alert"
+      >
+        Bu alana erişim yetkin yok.
+      </div>
+    );
   }
   if (state === "profile-error" || state === "list-error") {
     return (
-      <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center" role="alert">
-        <p className="font-semibold text-red-800">{state === "profile-error" ? "Kullanıcı profili yüklenemedi." : feedback?.message ?? "Destek başvuruları yüklenemedi."}</p>
-        <Button className="mt-4" onClick={() => void load(user.id)}>Tekrar Dene</Button>
+      <div
+        className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center"
+        role="alert"
+      >
+        <p className="font-semibold text-red-800">
+          {state === "profile-error"
+            ? "Kullanıcı profili yüklenemedi."
+            : (feedback?.message ?? "Destek başvuruları yüklenemedi.")}
+        </p>
+        <Button className="mt-4" onClick={() => void load(user.id)}>
+          Tekrar Dene
+        </Button>
       </div>
     );
   }
@@ -216,35 +264,41 @@ export function SupportRequestList() {
       <div className="mb-6 grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-2 xl:grid-cols-5">
         <label className="relative md:col-span-2">
           <span className="sr-only">Başvuru ara</span>
-          <Search aria-hidden="true" className="absolute left-3 top-3.5 size-4 text-slate-400" />
-          <Input className="pl-9" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="İsim, e-posta veya mesaj ara" />
+          <Search
+            aria-hidden="true"
+            className="absolute left-3 top-3.5 size-4 text-slate-400"
+          />
+          <Input
+            className="pl-9"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="İsim, e-posta veya mesaj ara"
+          />
         </label>
         <div>
-        <label htmlFor="support-request-status" className="sr-only">
-          Duruma göre filtrele
-        </label>
-        <Select
-          id="support-request-status"
-          value={statusFilter}
-          onChange={(event) =>
-            setStatusFilter(
-              event.target.value as SupportRequestStatus | "all",
-            )
-          }
-        >
-          <option value="all">Tüm durumlar</option>
-          <option value="pending">Onay Bekliyor</option>
-          <option value="approved">Onaylandı</option>
-          <option value="rejected">Reddedildi</option>
-        </Select>
+          <label htmlFor="support-request-status" className="sr-only">
+            Duruma göre filtrele
+          </label>
+          <Select
+            id="support-request-status"
+            value={statusFilter}
+            onChange={(event) =>
+              setStatusFilter(
+                event.target.value as SupportRequestStatus | "all",
+              )
+            }
+          >
+            <option value="all">Tüm durumlar</option>
+            <option value="pending">Onay Bekliyor</option>
+            <option value="approved">Onaylandı</option>
+            <option value="rejected">Reddedildi</option>
+          </Select>
         </div>
         <Select
           aria-label="Başvuru türüne göre filtrele"
           value={typeFilter}
           onChange={(event) =>
-            setTypeFilter(
-              event.target.value as SupportApplicationType | "all",
-            )
+            setTypeFilter(event.target.value as SupportApplicationType | "all")
           }
         >
           <option value="all">Tüm başvuru türleri</option>
@@ -252,14 +306,46 @@ export function SupportRequestList() {
           <option value="mentorship">Mentorluk</option>
           <option value="sponsorship">Sponsorluk teklifleri</option>
         </Select>
-        <Select aria-label="Başvuruları sırala" value={sort} onChange={(event) => setSort(event.target.value as typeof sort)}>
+        <Select
+          aria-label="Başvuruları sırala"
+          value={sort}
+          onChange={(event) => setSort(event.target.value as typeof sort)}
+        >
           <option value="newest">En yeni</option>
           <option value="oldest">En eski</option>
         </Select>
         <div className="flex flex-wrap gap-2 md:col-span-2 xl:col-span-4">
-          <Button disabled={selected.size === 0 || bulkBusy} onClick={() => setBulkAction("approve")}>Seçilenleri Onayla ({selected.size})</Button>
-          <Button variant="secondary" className="border-red-200 text-red-700" disabled={selected.size === 0 || bulkBusy} onClick={() => setBulkAction("reject")}>Seçilenleri Reddet</Button>
-          <Button variant="secondary" className="ml-auto" onClick={() => exportCsv("destek-basvurulari.csv", ["Başvuru Sahibi", "E-posta", "Durum", "Tarih", "Mesaj"], filteredRequests.map((item) => [item.applicantName, item.applicantEmail, item.request.status, item.request.createdAt, item.request.message]))}>
+          <Button
+            disabled={selected.size === 0 || bulkBusy}
+            onClick={() => setBulkAction("approve")}
+          >
+            Seçilenleri Onayla ({selected.size})
+          </Button>
+          <Button
+            variant="secondary"
+            className="border-red-200 text-red-700"
+            disabled={selected.size === 0 || bulkBusy}
+            onClick={() => setBulkAction("reject")}
+          >
+            Seçilenleri Reddet
+          </Button>
+          <Button
+            variant="secondary"
+            className="ml-auto"
+            onClick={() =>
+              exportCsv(
+                "destek-basvurulari.csv",
+                ["Başvuru Sahibi", "E-posta", "Durum", "Tarih", "Mesaj"],
+                filteredRequests.map((item) => [
+                  item.applicantName,
+                  item.applicantEmail,
+                  item.request.status,
+                  item.request.createdAt,
+                  item.request.message,
+                ]),
+              )
+            }
+          >
             <Download aria-hidden="true" className="size-4" /> CSV
           </Button>
         </div>
@@ -284,19 +370,34 @@ export function SupportRequestList() {
             <div key={item.request.id} className="relative">
               {item.request.status === "pending" && (
                 <label className="mb-2 flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700">
-                  <input type="checkbox" checked={selected.has(item.request.id)} onChange={(event) => setSelected((current) => {
-                    const next = new Set(current);
-                    if (event.target.checked) next.add(item.request.id);
-                    else next.delete(item.request.id);
-                    return next;
-                  })} />
+                  <input
+                    type="checkbox"
+                    checked={selected.has(item.request.id)}
+                    onChange={(event) =>
+                      setSelected((current) => {
+                        const next = new Set(current);
+                        if (event.target.checked) next.add(item.request.id);
+                        else next.delete(item.request.id);
+                        return next;
+                      })
+                    }
+                  />
                   Toplu işlem için seç
                 </label>
               )}
-              <SupportRequestCard item={item} adminId={user.id} onReviewed={updateReviewed} />
+              <SupportRequestCard
+                item={item}
+                adminId={user.id}
+                onReviewed={updateReviewed}
+              />
             </div>
           ))}
-          <AdminPagination page={safePage} pageSize={pageSize} total={filteredRequests.length} onPageChange={setPage} />
+          <AdminPagination
+            page={safePage}
+            pageSize={pageSize}
+            total={filteredRequests.length}
+            onPageChange={setPage}
+          />
         </div>
       )}
     </div>

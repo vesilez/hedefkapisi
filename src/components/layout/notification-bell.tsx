@@ -32,8 +32,11 @@ function getNotificationTarget(notification: Notification): string {
     case "admin_activity":
       return "/admin/sponsorlar";
     case "sponsor_approved":
-      return "/sponsor-paneli";
+      return "/sponsor/dashboard";
     case "sponsor_support_received":
+      return "/fikirlerim";
+    case "sponsorship_offer_approved":
+    case "sponsorship_offer_rejected":
       return "/fikirlerim";
   }
 }

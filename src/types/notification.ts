@@ -14,6 +14,8 @@ export const NOTIFICATION_TYPES = [
   "admin_activity",
   "sponsor_approved",
   "sponsor_support_received",
+  "sponsorship_offer_approved",
+  "sponsorship_offer_rejected",
 ] as const;
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];

@@ -16,6 +16,7 @@ const DASHBOARD_ROLE_RULES: ReadonlyArray<{
   { prefix: "/hayalini-paylas", roles: ["student"] },
   { prefix: "/fikirlerim", roles: ["student"] },
   { prefix: "/mentorluk", roles: ["student", "mentor"] },
+  { prefix: "/sponsor/dashboard", roles: ["sponsor"] },
   { prefix: "/sponsor-paneli", roles: ["sponsor"] },
   {
     prefix: "/mesajlar",
@@ -83,7 +84,13 @@ export function ProtectedRoute({
         return;
       }
 
-      router.replace(isAdminRole(role) ? "/admin" : "/profil");
+      router.replace(
+        pathname === "/sponsor/dashboard"
+          ? "/"
+          : isAdminRole(role)
+            ? "/admin"
+            : "/profil",
+      );
     });
 
     return () => {

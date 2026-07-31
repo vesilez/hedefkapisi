@@ -34,6 +34,8 @@ export function RegisterForm() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [registrationCompleted, setRegistrationCompleted] = useState(false);
+  const [registeredRole, setRegisteredRole] =
+    useState<PublicRegisterRole | null>(null);
   const {
     register,
     handleSubmit,
@@ -72,6 +74,7 @@ export function RegisterForm() {
       return;
     }
 
+    setRegisteredRole(values.role);
     setRegistrationCompleted(true);
   });
 
@@ -97,10 +100,12 @@ export function RegisterForm() {
           unutma.
         </div>
         <Link
-          href="/giris"
+          href={registeredRole === "sponsor" ? "/sponsor/dashboard" : "/giris"}
           className="mt-6 inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-blue-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-800 sm:w-auto"
         >
-          Giriş Yap sayfasına git
+          {registeredRole === "sponsor"
+            ? "Sponsor Dashboard'a Git"
+            : "Giriş Yap sayfasına git"}
         </Link>
       </Card>
     );
@@ -377,10 +382,7 @@ export function RegisterForm() {
               </label>
               <label className="grid gap-2 text-sm font-semibold text-slate-800">
                 Şehir
-                <Input
-                  {...register("sponsorProfile.city")}
-                  maxLength={80}
-                />
+                <Input {...register("sponsorProfile.city")} maxLength={80} />
               </label>
               <label className="grid gap-2 text-sm font-semibold text-slate-800">
                 Web sitesi

@@ -21,14 +21,17 @@ import {
 import type {
   SponsorDashboardData,
   SponsorIdeaFilters,
+  SponsorOfferListItem,
   SponsorProfile,
   SponsorStatus,
   SponsorSupport,
 } from "@/types/sponsor";
 import type { IdeaListItem } from "@/types/idea";
+import { getSupportRequestsByUser } from "@/services/support-request-service";
 import {
   collection,
   doc,
+  getDoc,
   getDocs,
   increment,
   orderBy,
@@ -237,6 +240,31 @@ async function getSupports(sponsorId: string): Promise<SponsorSupport[]> {
   });
 }
 
+async function getSponsorshipOffers(
+  sponsorId: string,
+): Promise<SponsorOfferListItem[]> {
+  const result = await getSupportRequestsByUser(sponsorId);
+  if (!result.success) throw new Error(result.error.message);
+  const requests = result.data.filter(
+    (request) => request.applicationType === "sponsorship",
+  );
+  return Promise.all(
+    requests.map(async (request) => {
+      const idea = await getDoc(doc(db, "ideas", request.ideaId));
+      const title: unknown = idea.data()?.title;
+      const slug: unknown = idea.data()?.slug;
+      return {
+        request,
+        ideaTitle:
+          typeof title === "string" && title.trim()
+            ? title.trim()
+            : "Hayal bulunamadı",
+        ideaSlug: typeof slug === "string" && slug ? slug : null,
+      };
+    }),
+  );
+}
+
 export async function getSponsorDashboard(
   filters: SponsorIdeaFilters = {},
 ): Promise<Result<SponsorDashboardData>> {
@@ -253,13 +281,35 @@ export async function getSponsorDashboard(
     const profile = profileSnapshot
       ? parseProfile(profileSnapshot.id, profileSnapshot.data())
       : null;
-    const [ideas, supports] = await Promise.all([
+    const [ideas, supports, offers] = await Promise.all([
       profile?.status === "approved"
         ? getSponsorIdeas(filters)
         : Promise.resolve([]),
       profile ? getSupports(userId) : Promise.resolve([]),
+      getSponsorshipOffers(userId),
     ]);
-    return { success: true, data: { profile, ideas, supports } };
+    return {
+      success: true,
+      data: {
+        profile,
+        ideas,
+        supports,
+        offers,
+        statistics: {
+          totalOffers: offers.length,
+          pendingOffers: offers.filter(
+            (offer) => offer.request.status === "pending",
+          ).length,
+          approvedOffers: offers.filter(
+            (offer) => offer.request.status === "approved",
+          ).length,
+          totalSupports:
+            supports.length +
+            offers.filter((offer) => offer.request.status === "approved")
+              .length,
+        },
+      },
+    };
   } catch (error: unknown) {
     return failure(error);
   }
@@ -400,7 +450,7 @@ export async function reviewSponsorApplication(
         status === "approved"
           ? "Sponsor paneliniz ve resmî destek özellikleri kullanıma açıldı."
           : "Başvurunuz reddedildi; bilgilerinizi güncelleyerek yeniden gönderebilirsiniz.",
-      targetUrl: "/sponsor-paneli",
+      targetUrl: "/sponsor/dashboard",
     });
     return { success: true, data: undefined };
   } catch (error: unknown) {

@@ -1,4 +1,5 @@
 import type { IdeaListItem } from "./idea";
+import type { SupportRequest } from "./support-request";
 
 export const SPONSOR_STATUSES = ["pending", "approved", "rejected"] as const;
 export type SponsorStatus = (typeof SPONSOR_STATUSES)[number];
@@ -56,8 +57,23 @@ export interface SponsorIdeaFilters {
   supportArea?: string;
 }
 
+export interface SponsorOfferListItem {
+  request: SupportRequest;
+  ideaTitle: string;
+  ideaSlug: string | null;
+}
+
+export interface SponsorDashboardStatistics {
+  totalOffers: number;
+  pendingOffers: number;
+  approvedOffers: number;
+  totalSupports: number;
+}
+
 export interface SponsorDashboardData {
   profile: SponsorProfile | null;
   ideas: IdeaListItem[];
   supports: SponsorSupport[];
+  offers: SponsorOfferListItem[];
+  statistics: SponsorDashboardStatistics;
 }

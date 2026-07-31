@@ -4,7 +4,8 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: { absolute: "Kayıt Ol | Hedef Kapısı" },
-  description: "Hedef Kapısı’na öğrenci, destekçi veya mentor olarak kayıt ol.",
+  description:
+    "Hedef Kapısı’na öğrenci, destekçi, mentor veya sponsor olarak kayıt ol.",
 };
 
 export default function RegisterPage() {

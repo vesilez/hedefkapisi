@@ -288,7 +288,7 @@ export function SupportRequestForm({ ideaId }: { ideaId: string }) {
                 htmlFor={`support-message-${ideaId}`}
                 className="font-semibold text-slate-900"
               >
-                Mesajın
+                {eligibleRole === "sponsor" ? "Teklif açıklaması" : "Mesajın"}
               </label>
               <Textarea
                 id={`support-message-${ideaId}`}
@@ -375,27 +375,27 @@ export function SupportRequestForm({ ideaId }: { ideaId: string }) {
             <div className="mt-6 grid gap-5 sm:grid-cols-2">
               {eligibleRole !== "sponsor" && (
                 <div>
-                <label
-                  htmlFor={`contact-preference-${ideaId}`}
-                  className="font-semibold text-slate-900"
-                >
-                  İletişim tercihi
-                </label>
-                <Select
-                  id={`contact-preference-${ideaId}`}
-                  className="mt-2"
-                  value={contactPreference}
-                  disabled={submitting}
-                  onChange={(event) =>
-                    setContactPreference(
-                      event.target.value as ContactPreference,
-                    )
-                  }
-                >
-                  <option value="platform">Platform mesajları</option>
-                  <option value="email">E-posta</option>
-                  <option value="phone">Telefon</option>
-                </Select>
+                  <label
+                    htmlFor={`contact-preference-${ideaId}`}
+                    className="font-semibold text-slate-900"
+                  >
+                    İletişim tercihi
+                  </label>
+                  <Select
+                    id={`contact-preference-${ideaId}`}
+                    className="mt-2"
+                    value={contactPreference}
+                    disabled={submitting}
+                    onChange={(event) =>
+                      setContactPreference(
+                        event.target.value as ContactPreference,
+                      )
+                    }
+                  >
+                    <option value="platform">Platform mesajları</option>
+                    <option value="email">E-posta</option>
+                    <option value="phone">Telefon</option>
+                  </Select>
                 </div>
               )}
               <div>
@@ -448,7 +448,9 @@ export function SupportRequestForm({ ideaId }: { ideaId: string }) {
               )}
               {submitting
                 ? "Başvuru gönderiliyor..."
-                : "Destek Başvurusu Gönder"}
+                : eligibleRole === "sponsor"
+                  ? "Sponsorluk Teklifini Gönder"
+                  : "Destek Başvurusu Gönder"}
             </Button>
           </form>
         )}

@@ -140,6 +140,34 @@ export function SupportRequestCard({
             {request.message}
           </p>
           <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+            {request.sponsorshipOffer && (
+              <>
+                <div>
+                  <dt className="font-semibold text-slate-700">
+                    Tahmini bütçe
+                  </dt>
+                  <dd className="mt-1 text-slate-600">
+                    {request.sponsorshipOffer.estimatedBudget}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="font-semibold text-slate-700">
+                    Süre / tarih aralığı
+                  </dt>
+                  <dd className="mt-1 text-slate-600">
+                    {request.sponsorshipOffer.duration}
+                  </dd>
+                </div>
+                <div className="sm:col-span-2">
+                  <dt className="font-semibold text-slate-700">
+                    Sağlanacak kaynaklar
+                  </dt>
+                  <dd className="mt-1 whitespace-pre-wrap text-slate-600">
+                    {request.sponsorshipOffer.resources}
+                  </dd>
+                </div>
+              </>
+            )}
             <div>
               <dt className="font-semibold text-slate-700">E-posta</dt>
               <dd className="mt-1 break-all text-slate-600">

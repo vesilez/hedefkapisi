@@ -6,71 +6,389 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Textarea } from "@/components/ui/textarea";
+import { SUPPORT_REQUEST_STATUS_LABELS } from "@/constants/support-request-statuses";
+import { SUPPORT_TYPE_LABELS } from "@/constants/support-types";
 import { useAuth } from "@/hooks/use-auth";
-import { createOfficialSponsorSupport, getSponsorDashboard, saveSponsorApplication } from "@/services/sponsor-service";
-import type { SponsorDashboardData } from "@/types/sponsor";
-import { Building2, Filter, History, Send } from "lucide-react";
+import {
+  getSponsorDashboard,
+  saveSponsorApplication,
+} from "@/services/sponsor-service";
+import type {
+  SponsorDashboardData,
+  SponsorOfferListItem,
+} from "@/types/sponsor";
+import {
+  Building2,
+  CheckCircle2,
+  Clock3,
+  HandCoins,
+  Lightbulb,
+  Send,
+} from "lucide-react";
+import Link from "next/link";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 
 export function SponsorPanel() {
   const { user, loading: authLoading } = useAuth();
   const [data, setData] = useState<SponsorDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [feedback, setFeedback] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
-  const [category, setCategory] = useState("");
-  const [city, setCity] = useState("");
-  const [supportArea, setSupportArea] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
   const load = useCallback(async () => {
-    const result = await getSponsorDashboard({ search, category, city, supportArea });
-    if (result.success) setData(result.data); else setFeedback(result.error.message);
+    setLoading(true);
+    const result = await getSponsorDashboard();
+    if (result.success) {
+      setData(result.data);
+      setError(null);
+    } else {
+      setError(result.error.message);
+    }
     setLoading(false);
-  }, [search, category, city, supportArea]);
+  }, []);
+
   useEffect(() => {
     if (authLoading || !user) return;
-    void getSponsorDashboard({ search, category, city, supportArea }).then((result) => {
-      if (result.success) setData(result.data);
-      else setFeedback(result.error.message);
+    let active = true;
+    void getSponsorDashboard().then((result) => {
+      if (!active) return;
+      if (result.success) {
+        setData(result.data);
+        setError(null);
+      } else {
+        setError(result.error.message);
+      }
       setLoading(false);
     });
-  }, [authLoading, user, search, category, city, supportArea]);
-  if (authLoading || loading) return <LoadingSpinner label="Sponsor paneli yükleniyor..." />;
-  if (!user) return <Card><p>Bu sayfa için giriş yapmalısınız.</p></Card>;
+    return () => {
+      active = false;
+    };
+  }, [authLoading, user]);
+
+  if (authLoading || loading) {
+    return <LoadingSpinner label="Sponsor paneli yükleniyor..." />;
+  }
+  if (!user) return null;
+  if (error) {
+    return (
+      <Card className="text-center">
+        <p className="text-red-700" role="alert">
+          {error}
+        </p>
+        <Button className="mt-4" onClick={() => void load()}>
+          Tekrar Dene
+        </Button>
+      </Card>
+    );
+  }
   if (!data?.profile) return <SponsorApplicationForm onSaved={load} />;
 
-  return <div className="space-y-8">
-    <Card><div className="flex flex-wrap items-center justify-between gap-4">
-      <div><p className="text-sm font-bold uppercase tracking-wider text-blue-700">Sponsor Paneli</p>
-        <h1 className="text-3xl font-black text-slate-950">{data.profile.institutionName}</h1></div>
-      <Badge>{data.profile.status === "approved" ? "Onaylı" : data.profile.status === "pending" ? "Onay bekliyor" : "Reddedildi"}</Badge>
-    </div></Card>
-    {data.profile.status !== "approved" ? <Card><p className="text-slate-700">Resmî destek araçları başvurunuz onaylandıktan sonra açılacak.</p></Card> :
-      <>
-        <section><h2 className="flex items-center gap-2 text-2xl font-black text-slate-950"><Filter className="size-5" />Hayalleri keşfet</h2>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Input aria-label="Hayallerde ara" placeholder="Başlık veya açıklama" value={search} onChange={(event) => setSearch(event.target.value)} />
-            <Input aria-label="Kategori filtresi" placeholder="Kategori kodu" value={category} onChange={(event) => setCategory(event.target.value)} />
-            <Input aria-label="Şehir filtresi" placeholder="Şehir" value={city} onChange={(event) => setCity(event.target.value)} />
-            <Input aria-label="Destek alanı filtresi" placeholder="Destek türü" value={supportArea} onChange={(event) => setSupportArea(event.target.value)} />
+  const approvedOffers = data.offers.filter(
+    (offer) => offer.request.status === "approved",
+  );
+  const pendingOffers = data.offers.filter(
+    (offer) => offer.request.status === "pending",
+  );
+  const rejectedOffers = data.offers.filter(
+    (offer) => offer.request.status === "rejected",
+  );
+
+  return (
+    <div className="space-y-8">
+      <Card className="overflow-hidden bg-gradient-to-br from-blue-800 to-blue-950 text-white">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-bold uppercase tracking-wider text-blue-200">
+              Sponsor / Kurum Paneli
+            </p>
+            <h1 className="mt-1 text-3xl font-black sm:text-4xl">
+              {data.profile.institutionName}
+            </h1>
+            <p className="mt-3 max-w-2xl text-blue-100">
+              Hayalleri keşfedin, sponsorluk tekliflerinizi ve onaylanan
+              desteklerinizi tek yerden takip edin.
+            </p>
           </div>
-          <div className="mt-5 grid gap-4 lg:grid-cols-2">{data.ideas.map((idea) => <SupportIdeaCard key={idea.id} idea={idea} onSupported={load} />)}</div>
-          {!data.ideas.length && <p className="mt-5 rounded-2xl bg-slate-50 p-6 text-slate-600">Filtreye uygun hayal bulunamadı.</p>}
+          <Badge className="w-fit bg-white/15 text-white">
+            {data.profile.status === "approved"
+              ? "Onaylı kurum"
+              : data.profile.status === "pending"
+                ? "Kurum onayı bekleniyor"
+                : "Kurum başvurusu reddedildi"}
+          </Badge>
+        </div>
+      </Card>
+
+      <section aria-labelledby="sponsor-statistics">
+        <h2 id="sponsor-statistics" className="sr-only">
+          Toplam destek istatistikleri
+        </h2>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatisticCard
+            label="Toplam teklif"
+            value={data.statistics.totalOffers}
+            icon={Send}
+          />
+          <StatisticCard
+            label="Bekleyen başvuru"
+            value={data.statistics.pendingOffers}
+            icon={Clock3}
+          />
+          <StatisticCard
+            label="Onaylanan teklif"
+            value={data.statistics.approvedOffers}
+            icon={CheckCircle2}
+          />
+          <StatisticCard
+            label="Toplam destek"
+            value={data.statistics.totalSupports}
+            icon={HandCoins}
+          />
+        </div>
+      </section>
+
+      {data.profile.status !== "approved" ? (
+        <Card>
+          <p className="text-slate-700">
+            Yeni sponsorluk teklifi araçları, kurum başvurunuz onaylandıktan
+            sonra kullanıma açılacak. Mevcut tekliflerinizin durumunu aşağıdan
+            takip edebilirsiniz.
+          </p>
+        </Card>
+      ) : (
+        <section aria-labelledby="recommended-ideas">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="text-sm font-bold uppercase tracking-wider text-blue-700">
+                Keşfet
+              </p>
+              <h2
+                id="recommended-ideas"
+                className="text-2xl font-black text-slate-950"
+              >
+                Önerilen hayaller
+              </h2>
+            </div>
+            <Link
+              href="/hayaller"
+              className="font-semibold text-blue-700 hover:text-blue-900"
+            >
+              Tüm hayalleri gör
+            </Link>
+          </div>
+          <div className="mt-4 grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+            {data.ideas.slice(0, 6).map((idea) => (
+              <Card key={idea.id} className="flex h-full flex-col">
+                <Lightbulb
+                  className="size-6 text-blue-700"
+                  aria-hidden="true"
+                />
+                <h3 className="mt-3 text-xl font-bold text-slate-950">
+                  {idea.title}
+                </h3>
+                <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-600">
+                  {idea.shortDescription}
+                </p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {idea.supportNeeds.slice(0, 3).map((type) => (
+                    <Badge key={type} className="bg-blue-50 text-blue-800">
+                      {SUPPORT_TYPE_LABELS[type]}
+                    </Badge>
+                  ))}
+                </div>
+                <Link
+                  href={`/hayaller/${idea.slug}`}
+                  className="mt-5 inline-flex min-h-11 items-center justify-center rounded-xl bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800"
+                >
+                  Hayali incele ve teklif ver
+                </Link>
+              </Card>
+            ))}
+          </div>
+          {data.ideas.length === 0 && (
+            <Card className="mt-4 text-slate-600">
+              Henüz önerilebilecek onaylı bir hayal bulunmuyor.
+            </Card>
+          )}
         </section>
-        <section><h2 className="flex items-center gap-2 text-2xl font-black text-slate-950"><History className="size-5" />Destek geçmişi</h2>
-          <div className="mt-4 space-y-3">{data.supports.map((support) => <Card key={support.id}><strong>{support.ideaTitle}</strong><p className="mt-1 text-sm text-slate-600">{new Date(support.createdAt).toLocaleString("tr-TR")}</p></Card>)}
-          {!data.supports.length && <p className="text-slate-600">Henüz resmî destek verilmedi.</p>}</div>
-        </section>
-      </>}
-    {feedback && <p role="status">{feedback}</p>}
-  </div>;
+      )}
+
+      <OfferSection
+        title="Bekleyen başvurular"
+        offers={pendingOffers}
+        emptyMessage="Değerlendirme bekleyen sponsorluk teklifiniz yok."
+      />
+      <OfferSection
+        title="Onaylanan destekler"
+        offers={approvedOffers}
+        emptyMessage="Henüz onaylanan bir sponsorluk teklifiniz yok."
+      />
+      <OfferSection
+        title="Reddedilen teklifler"
+        offers={rejectedOffers}
+        emptyMessage="Reddedilen bir sponsorluk teklifiniz yok."
+      />
+      <OfferSection
+        title="Gönderdiğim sponsorluk teklifleri"
+        offers={data.offers}
+        emptyMessage="Henüz bir sponsorluk teklifi göndermediniz."
+      />
+    </div>
+  );
+}
+
+function StatisticCard({
+  label,
+  value,
+  icon: Icon,
+}: {
+  label: string;
+  value: number;
+  icon: typeof Send;
+}) {
+  return (
+    <Card>
+      <Icon className="size-6 text-blue-700" aria-hidden="true" />
+      <p className="mt-3 text-3xl font-black text-slate-950">{value}</p>
+      <p className="mt-1 text-sm font-semibold text-slate-600">{label}</p>
+    </Card>
+  );
+}
+
+function OfferSection({
+  title,
+  offers,
+  emptyMessage,
+}: {
+  title: string;
+  offers: SponsorOfferListItem[];
+  emptyMessage: string;
+}) {
+  return (
+    <section>
+      <h2 className="text-2xl font-black text-slate-950">{title}</h2>
+      {offers.length === 0 ? (
+        <Card className="mt-4 text-slate-600">{emptyMessage}</Card>
+      ) : (
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          {offers.map(({ request, ideaTitle, ideaSlug }) => (
+            <Card key={request.id}>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-lg font-bold text-slate-950">
+                    {ideaTitle}
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {new Intl.DateTimeFormat("tr-TR", {
+                      dateStyle: "medium",
+                    }).format(new Date(request.createdAt))}
+                  </p>
+                </div>
+                <Badge>{SUPPORT_REQUEST_STATUS_LABELS[request.status]}</Badge>
+              </div>
+              {request.sponsorshipOffer && (
+                <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+                  <div>
+                    <dt className="font-semibold text-slate-700">Bütçe</dt>
+                    <dd className="mt-1 text-slate-600">
+                      {request.sponsorshipOffer.estimatedBudget}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="font-semibold text-slate-700">Süre</dt>
+                    <dd className="mt-1 text-slate-600">
+                      {request.sponsorshipOffer.duration}
+                    </dd>
+                  </div>
+                </dl>
+              )}
+              <details className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <summary className="cursor-pointer font-semibold text-blue-800">
+                  Teklif detaylarını görüntüle
+                </summary>
+                <dl className="mt-4 grid gap-4 text-sm sm:grid-cols-2">
+                  <div className="sm:col-span-2">
+                    <dt className="font-semibold text-slate-700">Açıklama</dt>
+                    <dd className="mt-1 whitespace-pre-wrap text-slate-600">
+                      {request.message}
+                    </dd>
+                  </div>
+                  {request.sponsorshipOffer && (
+                    <>
+                      <div className="sm:col-span-2">
+                        <dt className="font-semibold text-slate-700">
+                          Sağlanacak kaynaklar
+                        </dt>
+                        <dd className="mt-1 whitespace-pre-wrap text-slate-600">
+                          {request.sponsorshipOffer.resources}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="font-semibold text-slate-700">
+                          Tahmini bütçe
+                        </dt>
+                        <dd className="mt-1 text-slate-600">
+                          {request.sponsorshipOffer.estimatedBudget}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="font-semibold text-slate-700">
+                          Süre / tarih aralığı
+                        </dt>
+                        <dd className="mt-1 text-slate-600">
+                          {request.sponsorshipOffer.duration}
+                        </dd>
+                      </div>
+                    </>
+                  )}
+                  <div>
+                    <dt className="font-semibold text-slate-700">
+                      İletişim tercihi
+                    </dt>
+                    <dd className="mt-1 text-slate-600">
+                      {request.contactPreference === "platform"
+                        ? "Platform mesajları"
+                        : request.contactPreference === "email"
+                          ? "E-posta"
+                          : "Telefon"}
+                    </dd>
+                  </div>
+                  {request.adminNote && (
+                    <div className="sm:col-span-2">
+                      <dt className="font-semibold text-slate-700">
+                        Yönetici notu
+                      </dt>
+                      <dd className="mt-1 whitespace-pre-wrap text-slate-600">
+                        {request.adminNote}
+                      </dd>
+                    </div>
+                  )}
+                </dl>
+              </details>
+              {ideaSlug && (
+                <Link
+                  href={`/hayaller/${ideaSlug}`}
+                  className="mt-4 inline-flex font-semibold text-blue-700 hover:text-blue-900"
+                >
+                  Hayali görüntüle
+                </Link>
+              )}
+            </Card>
+          ))}
+        </div>
+      )}
+    </section>
+  );
 }
 
 function SponsorApplicationForm({ onSaved }: { onSaved: () => Promise<void> }) {
   const [areas, setAreas] = useState("");
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+
   async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setBusy(true);
+    event.preventDefault();
+    setBusy(true);
+    setFeedback(null);
     const values = new FormData(event.currentTarget);
     const result = await saveSponsorApplication({
       institutionName: String(values.get("institutionName") ?? ""),
@@ -78,37 +396,52 @@ function SponsorApplicationForm({ onSaved }: { onSaved: () => Promise<void> }) {
       description: String(values.get("description") ?? ""),
       website: String(values.get("website") ?? ""),
       city: String(values.get("city") ?? ""),
-      supportAreas: areas.split(",").map((item) => item.trim()).filter(Boolean),
+      supportAreas: areas
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean),
     });
-    if (result.success) await onSaved(); else setFeedback(result.error.message);
+    if (result.success) await onSaved();
+    else setFeedback(result.error.message);
     setBusy(false);
   }
-  return <Card className="mx-auto max-w-2xl"><Building2 className="size-9 text-blue-700" /><h1 className="mt-3 text-3xl font-black text-slate-950">Sponsor başvurusu</h1>
-    <form onSubmit={submit} className="mt-6 grid gap-4">
-      <Input name="institutionName" required placeholder="Kurum adı" />
-      <Input name="logoUrl" type="url" placeholder="Logo URL (isteğe bağlı)" />
-      <Textarea name="description" required minLength={20} placeholder="Kurum ve destek yaklaşımı" />
-      <Input name="website" type="url" placeholder="Web sitesi (isteğe bağlı)" />
-      <Input name="city" required placeholder="Şehir" />
-      <Input required value={areas} onChange={(event) => setAreas(event.target.value)} placeholder="Destek alanları (virgülle ayırın)" />
-      <Button disabled={busy}>{busy ? "Gönderiliyor..." : "Başvuruyu gönder"}</Button>
-      {feedback && <p role="alert">{feedback}</p>}
-    </form></Card>;
-}
 
-function SupportIdeaCard({ idea, onSupported }: { idea: SponsorDashboardData["ideas"][number]; onSupported: () => Promise<void> }) {
-  const [message, setMessage] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [feedback, setFeedback] = useState<string | null>(null);
-  async function support() {
-    setBusy(true); const result = await createOfficialSponsorSupport({ ideaId: idea.id, message });
-    if (result.success) { setMessage(""); setFeedback("Resmî destek kaydedildi."); await onSupported(); }
-    else setFeedback(result.error.message); setBusy(false);
-  }
-  return <Card><h3 className="text-xl font-bold text-slate-950">{idea.title}</h3><p className="mt-2 line-clamp-2 text-slate-600">{idea.shortDescription}</p>
-    <div className="mt-3 flex flex-wrap gap-2">{idea.supportNeeds.map((need) => <Badge key={need}>{need}</Badge>)}</div>
-    <Textarea className="mt-4" value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Resmî destek mesajınız" />
-    <Button className="mt-3" onClick={support} disabled={busy || message.trim().length < 10}><Send className="size-4" />Destek ver</Button>
-    {feedback && <p className="mt-2 text-sm" role="status">{feedback}</p>}
-  </Card>;
+  return (
+    <Card className="mx-auto max-w-2xl">
+      <Building2 className="size-9 text-blue-700" aria-hidden="true" />
+      <h1 className="mt-3 text-3xl font-black text-slate-950">
+        Sponsor başvurusu
+      </h1>
+      <form onSubmit={submit} className="mt-6 grid gap-4">
+        <Input name="institutionName" required placeholder="Kurum adı" />
+        <Input
+          name="logoUrl"
+          type="url"
+          placeholder="Logo URL (isteğe bağlı)"
+        />
+        <Textarea
+          name="description"
+          required
+          minLength={20}
+          placeholder="Kurum ve destek yaklaşımı"
+        />
+        <Input
+          name="website"
+          type="url"
+          placeholder="Web sitesi (isteğe bağlı)"
+        />
+        <Input name="city" required placeholder="Şehir" />
+        <Input
+          required
+          value={areas}
+          onChange={(event) => setAreas(event.target.value)}
+          placeholder="Destek alanları (virgülle ayırın)"
+        />
+        <Button disabled={busy}>
+          {busy ? "Gönderiliyor..." : "Başvuruyu gönder"}
+        </Button>
+        {feedback && <p role="alert">{feedback}</p>}
+      </form>
+    </Card>
+  );
 }

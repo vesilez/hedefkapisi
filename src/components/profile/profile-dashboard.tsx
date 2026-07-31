@@ -246,17 +246,17 @@ function ProfileSummary({
         </div>
         {profile.role === "sponsor" ? (
           <Link
-            href="/sponsor-paneli"
+            href="/sponsor/dashboard"
             className="inline-flex min-h-11 items-center justify-center rounded-xl border border-blue-200 bg-white px-5 py-2.5 text-sm font-semibold text-blue-800 hover:bg-blue-50"
           >
             <Building2 aria-hidden="true" className="mr-2 size-4" />
             Sponsor Profilini Yönet
           </Link>
         ) : (
-        <Button variant="secondary" onClick={onToggleEditing}>
-          <Pencil aria-hidden="true" className="mr-2 size-4" />
-          {editing ? "Düzenlemeyi Kapat" : "Profil Bilgilerini Düzenle"}
-        </Button>
+          <Button variant="secondary" onClick={onToggleEditing}>
+            <Pencil aria-hidden="true" className="mr-2 size-4" />
+            {editing ? "Düzenlemeyi Kapat" : "Profil Bilgilerini Düzenle"}
+          </Button>
         )}
       </div>
     </Card>

@@ -44,6 +44,7 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  writeBatch,
   Timestamp,
   where,
   type Unsubscribe,
@@ -331,14 +332,24 @@ export async function getAdminUserStatistics(
     const users = collection(db, "users");
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const [total, students, supporters, mentors, sponsors, addedLastThirtyDays] = await Promise.all([
+    const [
+      total,
+      students,
+      supporters,
+      mentors,
+      sponsors,
+      addedLastThirtyDays,
+    ] = await Promise.all([
       getCountFromServer(users),
       getCountFromServer(query(users, where("role", "==", "student"))),
       getCountFromServer(query(users, where("role", "==", "supporter"))),
       getCountFromServer(query(users, where("role", "==", "mentor"))),
       getCountFromServer(query(users, where("role", "==", "sponsor"))),
       getCountFromServer(
-        query(users, where("createdAt", ">=", Timestamp.fromDate(thirtyDaysAgo))),
+        query(
+          users,
+          where("createdAt", ">=", Timestamp.fromDate(thirtyDaysAgo)),
+        ),
       ),
     ]);
 
@@ -470,6 +481,7 @@ export async function createUserDocument(
     };
   }
 
+  let registrationStage = "checking-existing-user";
   try {
     const existing = await getDocFromServer(doc(db, "users", input.uid));
     if (existing.exists()) {
@@ -484,13 +496,14 @@ export async function createUserDocument(
         },
       };
     }
+    const profileCompleted = false;
     console.log("WRITING USER DOC", {
       path: `users/${input.uid}`,
       uid: input.uid,
       role: input.role,
-      profileCompleted: false,
+      profileCompleted,
     });
-    await setDoc(doc(db, "users", input.uid), {
+    const userDocument = {
       id: input.uid,
       uid: input.uid,
       role: input.role,
@@ -500,7 +513,7 @@ export async function createUserDocument(
       phone: "",
       city: "",
       status: "active",
-      profileCompleted: false,
+      profileCompleted,
       emailVerified: input.emailVerified,
       avatarUrl: null,
       score: 0,
@@ -515,14 +528,13 @@ export async function createUserDocument(
         : {}),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-    });
-    console.log("USER DOC CREATED", {
-      path: `users/${input.uid}`,
-      uid: input.uid,
-    });
+    };
+
     if (input.role === "sponsor" && input.sponsorProfile) {
-      try {
-        await setDoc(doc(db, "sponsorProfiles", input.uid), {
+      registrationStage = "committing-sponsor-user-and-profile";
+      const batch = writeBatch(db);
+      batch.set(doc(db, "users", input.uid), userDocument);
+      batch.set(doc(db, "sponsorProfiles", input.uid), {
         sponsorId: input.uid,
         institutionName: input.sponsorProfile.organizationName,
         organizationName: input.sponsorProfile.organizationName,
@@ -538,19 +550,16 @@ export async function createUserDocument(
         reviewedAt: null,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-        });
-      } catch (sponsorProfileError: unknown) {
-        console.error(
-          "[registration] Base user created but sponsor projection failed",
-          {
-            uid: input.uid,
-            code:
-              getFirebaseErrorCode(sponsorProfileError) ?? "firestore/unknown",
-            error: sponsorProfileError,
-          },
-        );
-      }
+      });
+      await batch.commit();
+    } else {
+      registrationStage = "creating-user-document";
+      await setDoc(doc(db, "users", input.uid), userDocument);
     }
+    console.log("USER DOC CREATED", {
+      path: `users/${input.uid}`,
+      uid: input.uid,
+    });
     try {
       await setDoc(doc(db, "leaderboard", input.uid), {
         userId: input.uid,
@@ -575,12 +584,17 @@ export async function createUserDocument(
 
     return { success: true, data: undefined };
   } catch (error: unknown) {
-    console.error("[registration:create-user-document] Firestore write failed", {
-      uid: input.uid,
-      role: input.role,
-      code: getFirebaseErrorCode(error) ?? "firestore/unknown",
-      error,
-    });
+    console.error(
+      "[registration:create-user-document] Firestore write failed",
+      {
+        uid: input.uid,
+        role: input.role,
+        stage: registrationStage,
+        code: getFirebaseErrorCode(error) ?? "firestore/unknown",
+        message: getFirebaseErrorMessage(error),
+        error,
+      },
+    );
     return failure(error);
   }
 }

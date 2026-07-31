@@ -198,9 +198,10 @@ export async function createSupportRequest(
     return messageFailure("Başvuru yapmak için giriş yapmalısınız.");
 
   try {
-    const [profile, idea] = await Promise.all([
+    const [profile, idea, sponsorProfile] = await Promise.all([
       getDoc(doc(db, "users", supporterId)),
       getDoc(doc(db, "ideas", validation.data.ideaId)),
+      getDoc(doc(db, "sponsorProfiles", supporterId)),
     ]);
 
     if (!profile.exists())
@@ -217,7 +218,18 @@ export async function createSupportRequest(
     if (validation.data.applicationType !== applicationType) {
       return messageFailure("Başvuru türü kullanıcı rolüyle uyumlu değil.");
     }
-    if (profile.data().profileCompleted !== true) {
+    if (
+      applicationType === "sponsorship" &&
+      (!sponsorProfile.exists() || sponsorProfile.data().status !== "approved")
+    ) {
+      return messageFailure(
+        "Sponsorluk teklifi göndermek için kurum hesabınızın onaylanması gerekiyor.",
+      );
+    }
+    if (
+      applicationType !== "sponsorship" &&
+      profile.data().profileCompleted !== true
+    ) {
       return messageFailure(
         "Başvuru yapmadan önce profilinizi tamamlamalısınız.",
       );
@@ -642,6 +654,8 @@ async function reviewSupportRequest(
         ? await getDoc(doc(db, "ideas", reviewedSupportRequest.ideaId))
         : null;
       const reviewedIdeaSlug: unknown = ideaSnapshot?.data()?.slug;
+      const ideaOwnerId: unknown = ideaSnapshot?.data()?.studentId;
+      const isSponsorship = reviewedData?.applicationType === "sponsorship";
       const targetUrl =
         status === "approved" && reviewedSupportRequest.chatId
           ? (`/mesajlar?sohbet=${reviewedSupportRequest.chatId}` as const)
@@ -653,8 +667,12 @@ async function reviewSupportRequest(
         sourceId: requestId,
         title:
           status === "approved"
-            ? "Destek başvurun onaylandı"
-            : "Destek başvurun reddedildi",
+            ? isSponsorship
+              ? "Sponsorluk teklifin onaylandı"
+              : "Destek başvurun onaylandı"
+            : isSponsorship
+              ? "Sponsorluk teklifin reddedildi"
+              : "Destek başvurun reddedildi",
         message:
           status === "approved"
             ? "Destek başvurun yönetici tarafından onaylandı."
@@ -670,6 +688,35 @@ async function reviewSupportRequest(
           "reviewSupportRequest",
           notification.error.message,
         );
+      }
+
+      if (isSponsorship && typeof ideaOwnerId === "string" && ideaOwnerId) {
+        const ownerNotification = await createNotification({
+          userId: ideaOwnerId,
+          sourceId: requestId,
+          title:
+            status === "approved"
+              ? "Sponsorluk teklifi onaylandı"
+              : "Sponsorluk teklifi reddedildi",
+          message:
+            status === "approved"
+              ? "Hayaline gelen sponsorluk teklifi yönetici tarafından onaylandı."
+              : "Hayaline gelen sponsorluk teklifi yönetici tarafından reddedildi.",
+          type:
+            status === "approved"
+              ? "sponsorship_offer_approved"
+              : "sponsorship_offer_rejected",
+          targetUrl:
+            typeof reviewedIdeaSlug === "string" && reviewedIdeaSlug
+              ? `/hayaller/${reviewedIdeaSlug}`
+              : "/fikirlerim",
+        });
+        if (!ownerNotification.success) {
+          logNotificationError(
+            "reviewSponsorshipOffer:owner",
+            ownerNotification.error.message,
+          );
+        }
       }
     }
 

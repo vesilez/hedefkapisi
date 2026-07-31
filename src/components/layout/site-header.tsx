@@ -128,7 +128,7 @@ export function SiteHeader() {
                 {profileAccess?.userId === user.id &&
                   profileAccess.role === "sponsor" && (
                     <Link
-                      href="/sponsor-paneli"
+                      href="/sponsor/dashboard"
                       className="rounded-xl px-4 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-50"
                     >
                       Sponsor Paneli
@@ -258,7 +258,7 @@ export function SiteHeader() {
                   {profileAccess?.userId === user.id &&
                     profileAccess.role === "sponsor" && (
                       <Link
-                        href="/sponsor-paneli"
+                        href="/sponsor/dashboard"
                         onClick={closeMobileMenu}
                         className="flex min-h-11 items-center rounded-lg px-3 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-50"
                       >

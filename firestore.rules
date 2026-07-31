@@ -675,7 +675,8 @@ service cloud.firestore {
           || (currentUser().data.role == "mentor"
             && request.resource.data.applicationType == "mentorship")
           || (currentUser().data.role == "sponsor"
-            && request.resource.data.applicationType == "sponsorship")
+            && request.resource.data.applicationType == "sponsorship"
+            && get(/databases/$(database)/documents/sponsorProfiles/$(request.auth.uid)).data.status == "approved")
         )
         && request.resource.data.contactPreference in ["platform", "email", "phone"]
         && validOptionalText(request.resource.data.contributionDetails, 1000)
@@ -832,6 +833,9 @@ service cloud.firestore {
           || (type in ["support_request_approved", "support_request_rejected"]
             && isAdmin()
             && get(/databases/$(database)/documents/supportRequests/$(sourceId)).data.supporterId == recipientId)
+          || (type in ["sponsorship_offer_approved", "sponsorship_offer_rejected"]
+            && isAdmin()
+            && get(/databases/$(database)/documents/ideas/$(get(/databases/$(database)/documents/supportRequests/$(sourceId)).data.ideaId)).data.studentId == recipientId)
           || (type == "chat_message"
             && actorId in get(/databases/$(database)/documents/chats/$(sourceId)).data.participantIds
             && recipientId in get(/databases/$(database)/documents/chats/$(sourceId)).data.participantIds
