@@ -3,6 +3,7 @@ import "client-only";
 import { isAdminRole } from "@/constants/roles";
 import { SUPPORT_REQUEST_STATUSES } from "@/constants/support-request-statuses";
 import { SUPPORT_TYPES } from "@/constants/support-types";
+import { USER_ROLES, type UserRole } from "@/constants/roles";
 import { auth } from "@/lib/firebase/auth";
 import { db } from "@/lib/firebase/firestore";
 import {
@@ -19,7 +20,12 @@ import { LEADERBOARD_POINTS } from "@/constants/leaderboard";
 import { applyScoreInTransaction } from "@/services/leaderboard-service";
 import type {
   CreateSupportRequestInput,
+  SupportApplicationType,
   SupportRequest,
+} from "@/types/support-request";
+import {
+  CONTACT_PREFERENCES,
+  SUPPORT_APPLICATION_TYPES,
 } from "@/types/support-request";
 import {
   collection,
@@ -46,6 +52,8 @@ export interface AdminSupportRequestListItem {
   request: SupportRequest;
   applicantName: string;
   applicantEmail: string;
+  applicantRole: UserRole;
+  ideaTitle: string;
 }
 
 export interface AdminSupportRequestStatistics {
@@ -75,7 +83,13 @@ const requestSchema = z.object({
   ideaId: z.string().min(1),
   supporterId: z.string().min(1),
   supportTypes: z.array(z.enum(SUPPORT_TYPES)),
+  applicationType: z.enum(SUPPORT_APPLICATION_TYPES).default("support"),
+  applicantRole: z
+    .enum(["supporter", "mentor", "sponsor"])
+    .default("supporter"),
   message: z.string(),
+  contactPreference: z.enum(CONTACT_PREFERENCES).default("platform"),
+  contributionDetails: z.string().nullable().default(null),
   status: z.enum(SUPPORT_REQUEST_STATUSES),
   adminNote: z.string().nullable(),
   reviewedBy: z.string().nullable(),
@@ -105,6 +119,13 @@ function logNotificationError(context: string, message: string): void {
     `[support-request-service:${context}] notification failed:`,
     message,
   );
+}
+
+function applicationTypeForRole(role: unknown): SupportApplicationType | null {
+  if (role === "supporter") return "support";
+  if (role === "mentor") return "mentorship";
+  if (role === "sponsor") return "sponsorship";
+  return null;
 }
 
 function parseRequests(
@@ -179,10 +200,14 @@ export async function createSupportRequest(
     const rawRole: unknown = profile.data().role;
     const role =
       typeof rawRole === "string" ? rawRole.trim().toLowerCase() : rawRole;
-    if (role !== "supporter" && role !== "mentor") {
+    const applicationType = applicationTypeForRole(role);
+    if (!applicationType) {
       return messageFailure(
-        "Bu fikir için destek başvurusu yalnızca destekçi veya mentor hesaplarıyla yapılabilir.",
+        "Bu hayale yalnızca destekçi, mentor veya sponsor hesapları başvurabilir.",
       );
+    }
+    if (validation.data.applicationType !== applicationType) {
+      return messageFailure("Başvuru türü kullanıcı rolüyle uyumlu değil.");
     }
     if (profile.data().profileCompleted !== true) {
       return messageFailure(
@@ -204,22 +229,28 @@ export async function createSupportRequest(
         collection(db, "supportRequests"),
         where("supporterId", "==", supporterId),
         where("ideaId", "==", validation.data.ideaId),
-        where("status", "==", "pending"),
+        where("applicationType", "==", applicationType),
         limit(1),
       ),
     );
     if (!duplicates.empty) {
       return messageFailure(
-        "Bu fikir için zaten değerlendirme bekleyen bir destek başvurun var.",
+        "Bu hayale aynı başvuru türüyle daha önce başvurdun.",
       );
     }
 
-    const reference = doc(collection(db, "supportRequests"));
+    const reference = doc(
+      db,
+      "supportRequests",
+      `${supporterId}__${validation.data.ideaId}__${applicationType}`,
+    );
     await runTransaction(db, async (transaction) => {
-      const [transactionProfile, transactionIdea] = await Promise.all([
-        transaction.get(doc(db, "users", supporterId)),
-        transaction.get(doc(db, "ideas", validation.data.ideaId)),
-      ]);
+      const [transactionProfile, transactionIdea, existingRequest] =
+        await Promise.all([
+          transaction.get(doc(db, "users", supporterId)),
+          transaction.get(doc(db, "ideas", validation.data.ideaId)),
+          transaction.get(reference),
+        ]);
       if (
         !transactionProfile.exists() ||
         !transactionIdea.exists() ||
@@ -227,12 +258,19 @@ export async function createSupportRequest(
       ) {
         throw new Error("support-request/not-available");
       }
+      if (existingRequest.exists()) {
+        throw new Error("support-request/duplicate");
+      }
       transaction.set(reference, {
         id: reference.id,
         ideaId: validation.data.ideaId,
         supporterId,
         supportTypes: validation.data.supportTypes,
+        applicationType,
+        applicantRole: role,
         message: validation.data.message,
+        contactPreference: validation.data.contactPreference,
+        contributionDetails: validation.data.contributionDetails,
         status: "pending",
         adminNote: "",
         reviewedBy: null,
@@ -289,6 +327,14 @@ export async function createSupportRequest(
 
     return { success: true, data: { id: reference.id } };
   } catch (error: unknown) {
+    if (
+      error instanceof Error &&
+      error.message === "support-request/duplicate"
+    ) {
+      return messageFailure(
+        "Bu hayale aynı başvuru türüyle daha önce başvurdun.",
+      );
+    }
     return failure(error);
   }
 }
@@ -357,16 +403,24 @@ export async function getAdminSupportRequests(
     const supporterIds = [
       ...new Set(parsedRequests.data.map((request) => request.supporterId)),
     ];
-    const applicants = new Map<string, { name: string; email: string }>();
+    const applicants = new Map<
+      string,
+      { name: string; email: string; role: UserRole }
+    >();
+    const ideaIds = [
+      ...new Set(parsedRequests.data.map((request) => request.ideaId)),
+    ];
+    const ideas = new Map<string, string>();
 
-    await Promise.all(
-      supporterIds.map(async (supporterId) => {
+    await Promise.all([
+      ...supporterIds.map(async (supporterId) => {
         const profile = await getDocFromServer(doc(db, "users", supporterId));
         if (!profile.exists()) return;
 
         const rawName: unknown = profile.data().name;
         const rawSurname: unknown = profile.data().surname;
         const rawEmail: unknown = profile.data().email;
+        const rawRole: unknown = profile.data().role;
         const name = [rawName, rawSurname]
           .filter(
             (value): value is string =>
@@ -381,9 +435,20 @@ export async function getAdminSupportRequests(
             typeof rawEmail === "string" && rawEmail.trim()
               ? rawEmail.trim()
               : "E-posta bulunamadı",
+          role: z.enum(USER_ROLES).catch("supporter").parse(rawRole),
         });
       }),
-    );
+      ...ideaIds.map(async (ideaId) => {
+        const idea = await getDocFromServer(doc(db, "ideas", ideaId));
+        const title: unknown = idea.data()?.title;
+        ideas.set(
+          ideaId,
+          typeof title === "string" && title.trim()
+            ? title.trim()
+            : "Hayal bulunamadı",
+        );
+      }),
+    ]);
 
     return {
       success: true,
@@ -393,6 +458,8 @@ export async function getAdminSupportRequests(
           request,
           applicantName: applicant?.name ?? "Kullanıcı bulunamadı",
           applicantEmail: applicant?.email ?? "E-posta bulunamadı",
+          applicantRole: applicant?.role ?? request.applicantRole,
+          ideaTitle: ideas.get(request.ideaId) ?? "Hayal bulunamadı",
         };
       }),
     };
@@ -413,10 +480,7 @@ export async function getAdminSupportRequestStatistics(
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     const [total, pending, addedLastThirtyDays] = await Promise.all([
       getCountFromServer(requests),
-      getCountFromServer(query(
-        requests,
-        where("status", "==", "pending"),
-      )),
+      getCountFromServer(query(requests, where("status", "==", "pending"))),
       getCountFromServer(
         query(
           requests,

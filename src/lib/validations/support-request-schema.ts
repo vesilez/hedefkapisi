@@ -5,12 +5,17 @@ import {
 import { z } from "zod";
 import { entityIdSchema } from "./common-schema";
 import { safeText } from "./safe-text";
+import {
+  CONTACT_PREFERENCES,
+  SUPPORT_APPLICATION_TYPES,
+} from "@/types/support-request";
 
 const uniqueValues = (values: readonly string[]) =>
   new Set(values).size === values.length;
 
 export const createSupportRequestSchema = z.object({
   ideaId: entityIdSchema,
+  applicationType: z.enum(SUPPORT_APPLICATION_TYPES),
   supportTypes: z
     .array(z.enum(SUPPORT_TYPES))
     .min(1, "En az bir destek türü seçin.")
@@ -18,15 +23,20 @@ export const createSupportRequestSchema = z.object({
     .refine(uniqueValues, "Destek türleri tekrar eden değer içeremez.")
     .refine(
       (values) =>
-        values.every(
-          (value) => value !== "financial" && SUPPORT_TYPE_MVP_ENABLED[value],
+        values.every((value) =>
+          value === "financial" ? true : SUPPORT_TYPE_MVP_ENABLED[value],
         ),
-      "Finansal destek MVP sürümünde kullanılamaz.",
+      "Geçersiz destek türü.",
     ),
   message: safeText()
     .trim()
     .min(20, "Mesaj en az 20 karakter olmalıdır.")
     .max(1500, "Mesaj en fazla 1500 karakter olabilir."),
+  contactPreference: z.enum(CONTACT_PREFERENCES),
+  contributionDetails: safeText()
+    .trim()
+    .max(1000, "Bütçe veya katkı açıklaması en fazla 1000 karakter olabilir.")
+    .nullable(),
 });
 
 export type CreateSupportRequestSchemaInput = z.infer<

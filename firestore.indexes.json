@@ -59,6 +59,15 @@
       ]
     },
     {
+      "collectionGroup": "supportRequests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "supporterId", "order": "ASCENDING" },
+        { "fieldPath": "ideaId", "order": "ASCENDING" },
+        { "fieldPath": "applicationType", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "notifications",
       "queryScope": "COLLECTION",
       "fields": [

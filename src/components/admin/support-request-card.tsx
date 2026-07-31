@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { SUPPORT_REQUEST_STATUS_LABELS } from "@/constants/support-request-statuses";
 import { SUPPORT_TYPE_LABELS } from "@/constants/support-types";
+import { USER_ROLE_LABELS } from "@/constants/roles";
 import {
   approveSupportRequest,
   rejectSupportRequest,
@@ -14,6 +15,18 @@ import {
 import type { SupportRequestStatus } from "@/constants/support-request-statuses";
 import { LoaderCircle } from "lucide-react";
 import { useState } from "react";
+
+const APPLICATION_TYPE_LABELS = {
+  support: "Destek",
+  mentorship: "Mentorluk",
+  sponsorship: "Sponsorluk",
+} as const;
+
+const CONTACT_PREFERENCE_LABELS = {
+  platform: "Platform mesajları",
+  email: "E-posta",
+  phone: "Telefon",
+} as const;
 
 export function SupportRequestCard({
   item,
@@ -29,7 +42,8 @@ export function SupportRequestCard({
     message: string,
   ) => void;
 }) {
-  const { request, applicantName, applicantEmail } = item;
+  const { request, applicantName, applicantEmail, applicantRole, ideaTitle } =
+    item;
   const [note, setNote] = useState(request.adminNote ?? "");
   const [busy, setBusy] = useState(false);
   const [action, setAction] = useState<"approve" | "reject" | null>(null);
@@ -81,6 +95,9 @@ export function SupportRequestCard({
         <Badge className={statusClass}>
           {SUPPORT_REQUEST_STATUS_LABELS[request.status]}
         </Badge>
+        <Badge className="bg-blue-50 text-blue-800">
+          {APPLICATION_TYPE_LABELS[request.applicationType]}
+        </Badge>
         {request.supportTypes.map((type) => (
           <Badge key={type} className="bg-emerald-50 text-emerald-800">
             {SUPPORT_TYPE_LABELS[type]}
@@ -88,22 +105,20 @@ export function SupportRequestCard({
         ))}
       </div>
 
-      <dl className="mt-5 grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
+      <dl className="mt-5 grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-3">
         <div>
           <dt className="font-semibold text-slate-700">Başvuru sahibi</dt>
           <dd className="mt-1 text-slate-600">{applicantName}</dd>
         </div>
         <div>
-          <dt className="font-semibold text-slate-700">E-posta</dt>
-          <dd className="mt-1 break-all text-slate-600">{applicantEmail}</dd>
+          <dt className="font-semibold text-slate-700">Kullanıcı rolü</dt>
+          <dd className="mt-1 text-slate-600">
+            {USER_ROLE_LABELS[applicantRole]}
+          </dd>
         </div>
         <div>
-          <dt className="font-semibold text-slate-700">Destek türü</dt>
-          <dd className="mt-1 text-slate-600">
-            {request.supportTypes
-              .map((type) => SUPPORT_TYPE_LABELS[type])
-              .join(", ")}
-          </dd>
+          <dt className="font-semibold text-slate-700">Hayal başlığı</dt>
+          <dd className="mt-1 break-words text-slate-600">{ideaTitle}</dd>
         </div>
         <div>
           <dt className="font-semibold text-slate-700">Başvuru tarihi</dt>
@@ -125,6 +140,26 @@ export function SupportRequestCard({
             {request.message}
           </p>
           <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+            <div>
+              <dt className="font-semibold text-slate-700">E-posta</dt>
+              <dd className="mt-1 break-all text-slate-600">
+                {applicantEmail}
+              </dd>
+            </div>
+            <div>
+              <dt className="font-semibold text-slate-700">İletişim tercihi</dt>
+              <dd className="mt-1 text-slate-600">
+                {CONTACT_PREFERENCE_LABELS[request.contactPreference]}
+              </dd>
+            </div>
+            <div className="sm:col-span-2">
+              <dt className="font-semibold text-slate-700">
+                Bütçe veya katkı açıklaması
+              </dt>
+              <dd className="mt-1 whitespace-pre-wrap text-slate-600">
+                {request.contributionDetails || "Belirtilmedi"}
+              </dd>
+            </div>
             <div>
               <dt className="font-semibold text-slate-700">Fikir ID</dt>
               <dd className="mt-1 break-all text-slate-600">

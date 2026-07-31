@@ -654,10 +654,12 @@ service cloud.firestore {
       }
 
       allow create: if signedIn()
-        && currentUser().data.role in ["supporter", "mentor"]
+        && currentUser().data.role in ["supporter", "mentor", "sponsor"]
         && request.resource.data.keys().hasOnly([
-          "id", "ideaId", "supporterId", "supportTypes", "message", "status",
-          "adminNote", "reviewedBy", "reviewedAt", "createdAt", "updatedAt"
+          "id", "ideaId", "supporterId", "supportTypes", "applicationType",
+          "applicantRole", "message", "contactPreference",
+          "contributionDetails", "status", "adminNote", "reviewedBy",
+          "reviewedAt", "createdAt", "updatedAt"
         ])
         && request.resource.data.id == requestId
         && request.resource.data.supporterId == request.auth.uid
@@ -666,6 +668,17 @@ service cloud.firestore {
         && request.resource.data.message.size() >= 20
         && request.resource.data.message.size() <= 1500
         && safeUserText(request.resource.data.message, 20, 1500)
+        && request.resource.data.applicantRole == currentUser().data.role
+        && (
+          (currentUser().data.role == "supporter"
+            && request.resource.data.applicationType == "support")
+          || (currentUser().data.role == "mentor"
+            && request.resource.data.applicationType == "mentorship")
+          || (currentUser().data.role == "sponsor"
+            && request.resource.data.applicationType == "sponsorship")
+        )
+        && request.resource.data.contactPreference in ["platform", "email", "phone"]
+        && validOptionalText(request.resource.data.contributionDetails, 1000)
         && request.resource.data.supportTypes is list
         && request.resource.data.supportTypes.size() >= 1
         && request.resource.data.supportTypes.size() <= 4
