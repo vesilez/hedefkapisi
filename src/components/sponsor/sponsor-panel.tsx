@@ -6,8 +6,8 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Textarea } from "@/components/ui/textarea";
+import { IdeaRecommendations } from "@/components/recommendations/idea-recommendations";
 import { SUPPORT_REQUEST_STATUS_LABELS } from "@/constants/support-request-statuses";
-import { SUPPORT_TYPE_LABELS } from "@/constants/support-types";
 import { useAuth } from "@/hooks/use-auth";
 import {
   getSponsorDashboard,
@@ -22,7 +22,6 @@ import {
   CheckCircle2,
   Clock3,
   HandCoins,
-  Lightbulb,
   Send,
 } from "lucide-react";
 import Link from "next/link";
@@ -155,7 +154,11 @@ export function SponsorPanel() {
         </div>
       </section>
 
-      {data.profile.approvalStatus !== "approved" ? (
+      {data.profile.approvalStatus === "approved" && (
+        <IdeaRecommendations role="sponsor" />
+      )}
+
+      {data.profile.approvalStatus !== "approved" && (
         <Card>
           <p className="text-slate-700">
             Yeni sponsorluk teklifi araçları, kurum başvurunuz onaylandıktan
@@ -163,62 +166,6 @@ export function SponsorPanel() {
             takip edebilirsiniz.
           </p>
         </Card>
-      ) : (
-        <section aria-labelledby="recommended-ideas">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <p className="text-sm font-bold uppercase tracking-wider text-blue-700">
-                Keşfet
-              </p>
-              <h2
-                id="recommended-ideas"
-                className="text-2xl font-black text-slate-950"
-              >
-                Önerilen hayaller
-              </h2>
-            </div>
-            <Link
-              href="/hayaller"
-              className="font-semibold text-blue-700 hover:text-blue-900"
-            >
-              Tüm hayalleri gör
-            </Link>
-          </div>
-          <div className="mt-4 grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-            {data.ideas.slice(0, 6).map((idea) => (
-              <Card key={idea.id} className="flex h-full flex-col">
-                <Lightbulb
-                  className="size-6 text-blue-700"
-                  aria-hidden="true"
-                />
-                <h3 className="mt-3 text-xl font-bold text-slate-950">
-                  {idea.title}
-                </h3>
-                <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-600">
-                  {idea.shortDescription}
-                </p>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {idea.supportNeeds.slice(0, 3).map((type) => (
-                    <Badge key={type} className="bg-blue-50 text-blue-800">
-                      {SUPPORT_TYPE_LABELS[type]}
-                    </Badge>
-                  ))}
-                </div>
-                <Link
-                  href={`/hayaller/${idea.slug}`}
-                  className="mt-5 inline-flex min-h-11 items-center justify-center rounded-xl bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800"
-                >
-                  Hayali incele ve teklif ver
-                </Link>
-              </Card>
-            ))}
-          </div>
-          {data.ideas.length === 0 && (
-            <Card className="mt-4 text-slate-600">
-              Henüz önerilebilecek onaylı bir hayal bulunmuyor.
-            </Card>
-          )}
-        </section>
       )}
 
       <OfferSection

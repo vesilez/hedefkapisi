@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { IdeaRecommendations } from "@/components/recommendations/idea-recommendations";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/use-auth";
@@ -111,6 +112,8 @@ export function MentorDashboard() {
         />
         <StatCard label="Reddedilen/iptal" value={data.rejected} icon={X} />
       </div>
+
+      <IdeaRecommendations role="mentor" />
 
       <PanelSection title="Bekleyen Talepler" count={data.pending.length}>
         {data.pending.length === 0 ? (

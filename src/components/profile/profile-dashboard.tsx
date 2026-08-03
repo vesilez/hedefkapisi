@@ -35,6 +35,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { FavoriteIdeas } from "@/components/ideas";
 import { StudentMentorshipSummary } from "@/components/mentorship";
 import { ProfileForm } from "./profile-form";
+import { IdeaRecommendations } from "@/components/recommendations/idea-recommendations";
 
 const TABS = [
   "overview",
@@ -158,6 +159,9 @@ export function ProfileDashboard() {
         onToggleEditing={() => setEditingProfile((current) => !current)}
       />
       {data.profile.role === "student" && <StudentMentorshipSummary />}
+      {data.profile.role === "supporter" && (
+        <IdeaRecommendations role="supporter" />
+      )}
 
       {editingProfile && data.profile.role !== "sponsor" && (
         <section id="profil-duzenle" className="mt-6">
