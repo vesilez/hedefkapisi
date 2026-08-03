@@ -23,6 +23,10 @@ const DASHBOARD_ROLE_RULES: ReadonlyArray<{
     roles: ["student", "supporter", "mentor", "sponsor", "admin", "superadmin"],
   },
   {
+    prefix: "/takvim",
+    roles: ["student", "supporter", "mentor", "sponsor", "admin", "superadmin"],
+  },
+  {
     prefix: "/favorilerim",
     roles: ["student", "supporter", "mentor", "sponsor"],
   },

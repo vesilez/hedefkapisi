@@ -3,7 +3,7 @@
 import { useAuth } from "@/hooks/use-auth";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LogIn, Menu, MessageCircle, Target, UserPlus, X } from "lucide-react";
+import { CalendarDays, LogIn, Menu, MessageCircle, Target, UserPlus, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { mainNavigation } from "@/config/navigation";
 import { siteConfig } from "@/config/site";
@@ -163,6 +163,13 @@ export function SiteHeader() {
                   )}
                 </Link>
                 <Link
+                  href="/takvim"
+                  className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-50"
+                >
+                  <CalendarDays aria-hidden="true" className="size-4" />
+                  Takvim
+                </Link>
+                <Link
                   href="/profil"
                   className="rounded-xl px-4 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-50"
                 >
@@ -293,6 +300,14 @@ export function SiteHeader() {
                   >
                     <MessageCircle aria-hidden="true" className="size-4" />
                     Mesajlar
+                  </Link>
+                  <Link
+                    href="/takvim"
+                    onClick={closeMobileMenu}
+                    className="flex min-h-11 items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-50"
+                  >
+                    <CalendarDays aria-hidden="true" className="size-4" />
+                    Takvim
                   </Link>
                   <Link
                     href="/profil"

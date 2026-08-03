@@ -17,5 +17,6 @@ export const adminNavigation = [
   { label: "Destek Başvuruları", href: "/admin/destek-basvurulari" },
   { label: "Mentorluklar", href: "/admin/mentorluklar" },
   { label: "Sponsorlar", href: "/admin/sponsorlar" },
+  { label: "Toplantılar", href: "/admin/toplantilar" },
   { label: "Geri Bildirimler", href: "/admin/geri-bildirimler" },
 ] as const;

@@ -17,6 +17,7 @@ import { getUserAccessProfile } from "@/services/user-service";
 import type { Chat, ChatMessage } from "@/types/chat";
 import {
   ArrowLeft,
+  CalendarPlus,
   Circle,
   LoaderCircle,
   MessageCircle,
@@ -408,6 +409,16 @@ export function ChatDashboard() {
                     Özel destek görüşmesi
                   </p>
                 </div>
+                {!isAdminRole(role) && (
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/takvim?sohbet=${selectedChat.id}`)}
+                    className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-xl border border-blue-200 px-3 text-sm font-semibold text-blue-800 hover:bg-blue-50"
+                  >
+                    <CalendarPlus aria-hidden="true" className="size-4" />
+                    <span className="hidden sm:inline">Toplantı Planla</span>
+                  </button>
+                )}
                 {isAdminRole(role) && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">
                     <ShieldCheck aria-hidden="true" className="size-3.5" />
