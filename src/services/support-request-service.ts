@@ -36,7 +36,6 @@ import {
   getDocs,
   getDocsFromServer,
   limit,
-  orderBy,
   query,
   runTransaction,
   serverTimestamp,
@@ -100,8 +99,8 @@ const requestSchema = z.object({
     .default(null),
   status: z.enum(SUPPORT_REQUEST_STATUSES),
   adminNote: z.string().nullable(),
-  reviewedBy: z.string().nullable(),
-  reviewedAt: z.union([timestampSchema, z.null()]),
+  reviewedBy: z.string().nullable().default(null),
+  reviewedAt: z.union([timestampSchema, z.null()]).default(null),
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
 });
@@ -110,6 +109,8 @@ function failure<T>(error: unknown): SupportRequestServiceResult<T> {
   console.error("[support-request-service] Firestore operation failed", {
     userId: auth.currentUser?.uid ?? null,
     code: getFirebaseErrorCode(error) ?? "firestore/unknown",
+    message:
+      error instanceof Error ? error.message : getFirebaseErrorMessage(error),
     error,
   });
   return {
@@ -261,21 +262,43 @@ export async function createSupportRequest(
       );
     }
 
-    const reference =
-      applicationType === "sponsorship"
-        ? doc(collection(db, "supportRequests"))
-        : doc(
-            db,
-            "supportRequests",
-            `${supporterId}__${validation.data.ideaId}__${applicationType}`,
-          );
+    const reference = doc(
+      db,
+      "supportRequests",
+      `${supporterId}__${validation.data.ideaId}__${applicationType}`,
+    );
+    const requestPayload = {
+      id: reference.id,
+      ideaId: validation.data.ideaId,
+      supporterId,
+      supportTypes: validation.data.supportTypes,
+      applicationType,
+      applicantRole: role,
+      message: validation.data.message,
+      contactPreference: validation.data.contactPreference,
+      contributionDetails: validation.data.contributionDetails,
+      sponsorshipOffer: validation.data.sponsorshipOffer,
+      status: "pending" as const,
+      adminNote: "",
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+    console.log("[support-request-service] Firestore create payload", {
+      path: `supportRequests/${reference.id}`,
+      documentId: reference.id,
+      fields: Object.keys(requestPayload),
+      values: requestPayload,
+      authUid: auth.currentUser?.uid ?? null,
+      userRole: role,
+      sponsorApprovalStatus: sponsorProfile.exists()
+        ? (sponsorProfile.data().approvalStatus ?? null)
+        : null,
+    });
     await runTransaction(db, async (transaction) => {
-      const [transactionProfile, transactionIdea, existingRequest] =
-        await Promise.all([
-          transaction.get(doc(db, "users", supporterId)),
-          transaction.get(doc(db, "ideas", validation.data.ideaId)),
-          transaction.get(reference),
-        ]);
+      const [transactionProfile, transactionIdea] = await Promise.all([
+        transaction.get(doc(db, "users", supporterId)),
+        transaction.get(doc(db, "ideas", validation.data.ideaId)),
+      ]);
       if (
         !transactionProfile.exists() ||
         !transactionIdea.exists() ||
@@ -283,34 +306,19 @@ export async function createSupportRequest(
       ) {
         throw new Error("support-request/not-available");
       }
-      if (existingRequest.exists()) {
-        throw new Error("support-request/duplicate");
+      transaction.set(reference, requestPayload);
+      // Sponsorship offers are approval applications, not completed support.
+      // Keep their transaction scoped to supportRequests so unrelated score,
+      // scoreEvents or leaderboard rules cannot roll the offer back.
+      if (applicationType !== "sponsorship") {
+        applyScoreInTransaction(
+          transaction,
+          transactionProfile,
+          "support",
+          reference.id,
+          LEADERBOARD_POINTS.supportGiven,
+        );
       }
-      transaction.set(reference, {
-        id: reference.id,
-        ideaId: validation.data.ideaId,
-        supporterId,
-        supportTypes: validation.data.supportTypes,
-        applicationType,
-        applicantRole: role,
-        message: validation.data.message,
-        contactPreference: validation.data.contactPreference,
-        contributionDetails: validation.data.contributionDetails,
-        sponsorshipOffer: validation.data.sponsorshipOffer,
-        status: "pending",
-        adminNote: "",
-        reviewedBy: null,
-        reviewedAt: null,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-      applyScoreInTransaction(
-        transaction,
-        transactionProfile,
-        "support",
-        reference.id,
-        LEADERBOARD_POINTS.supportGiven,
-      );
     });
 
     const ideaOwnerId: unknown = idea.data().studentId;
@@ -417,12 +425,16 @@ export async function getAdminSupportRequests(
 
   try {
     const snapshots = await getDocsFromServer(
-      query(
-        collection(db, "supportRequests"),
-        orderBy("createdAt", "desc"),
-        limit(250),
-      ),
+      collection(db, "supportRequests"),
     );
+    const rawSponsorshipCount = snapshots.docs.filter(
+      (snapshot) => snapshot.data().applicationType === "sponsorship",
+    ).length;
+    console.log("[admin-support-requests] Firestore query result", {
+      totalCount: snapshots.size,
+      sponsorshipCount: rawSponsorshipCount,
+      filters: { collection: "supportRequests", limit: null, orderBy: null },
+    });
     const parsedRequests = parseRequests(snapshots);
     if (!parsedRequests.success) return parsedRequests;
 
@@ -437,6 +449,7 @@ export async function getAdminSupportRequests(
       ...new Set(parsedRequests.data.map((request) => request.ideaId)),
     ];
     const ideas = new Map<string, string>();
+    const sponsorOrganizations = new Map<string, string>();
 
     await Promise.all([
       ...supporterIds.map(async (supporterId) => {
@@ -474,6 +487,21 @@ export async function getAdminSupportRequests(
             : "Hayal bulunamadı",
         );
       }),
+      ...parsedRequests.data
+        .filter((request) => request.applicationType === "sponsorship")
+        .map(async (request) => {
+          const sponsorProfile = await getDocFromServer(
+            doc(db, "sponsorProfiles", request.supporterId),
+          );
+          const institutionName: unknown =
+            sponsorProfile.data()?.institutionName;
+          if (typeof institutionName === "string" && institutionName.trim()) {
+            sponsorOrganizations.set(
+              request.supporterId,
+              institutionName.trim(),
+            );
+          }
+        }),
     ]);
 
     return {
@@ -482,7 +510,12 @@ export async function getAdminSupportRequests(
         const applicant = applicants.get(request.supporterId);
         return {
           request,
-          applicantName: applicant?.name ?? "Kullanıcı bulunamadı",
+          applicantName:
+            request.applicationType === "sponsorship"
+              ? (sponsorOrganizations.get(request.supporterId) ??
+                applicant?.name ??
+                "Sponsor bulunamadı")
+              : (applicant?.name ?? "Kullanıcı bulunamadı"),
           applicantEmail: applicant?.email ?? "E-posta bulunamadı",
           applicantRole: applicant?.role ?? request.applicantRole,
           ideaTitle: ideas.get(request.ideaId) ?? "Hayal bulunamadı",
@@ -558,7 +591,9 @@ async function reviewSupportRequest(
             : "";
         let chatId = "";
 
-        if (status === "approved") {
+        const isSponsorship =
+          snapshot.data().applicationType === "sponsorship";
+        if (status === "approved" && !isSponsorship) {
           if (!supporterId || !ideaId) {
             throw new Error("support-request/invalid-participants");
           }

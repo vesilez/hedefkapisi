@@ -130,7 +130,10 @@ export function SupportRequestCard({
         </div>
       </dl>
 
-      <details className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+      <details
+        open={request.applicationType === "sponsorship"}
+        className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4"
+      >
         <summary className="cursor-pointer font-semibold text-blue-800">
           Başvuru detaylarını görüntüle
         </summary>

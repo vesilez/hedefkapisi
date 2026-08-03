@@ -653,13 +653,22 @@ service cloud.firestore {
         return get(/databases/$(database)/documents/ideas/$(resource.data.ideaId));
       }
 
+      function validSponsorCreate() {
+        return currentUser().data.role == "sponsor"
+          && request.resource.data.supporterId == request.auth.uid
+          && request.resource.data.applicantRole == "sponsor"
+          && request.resource.data.applicationType == "sponsorship"
+          && requestId == request.auth.uid + "__" + request.resource.data.ideaId + "__sponsorship"
+          && get(/databases/$(database)/documents/sponsorProfiles/$(request.auth.uid)).data.approvalStatus == "approved";
+      }
+
       allow create: if signedIn()
         && currentUser().data.role in ["supporter", "mentor", "sponsor"]
         && request.resource.data.keys().hasOnly([
           "id", "ideaId", "supporterId", "supportTypes", "applicationType",
           "applicantRole", "message", "contactPreference",
-          "contributionDetails", "sponsorshipOffer", "status", "adminNote", "reviewedBy",
-          "reviewedAt", "createdAt", "updatedAt"
+          "contributionDetails", "sponsorshipOffer", "status", "adminNote",
+          "createdAt", "updatedAt"
         ])
         && request.resource.data.id == requestId
         && request.resource.data.supporterId == request.auth.uid
@@ -674,9 +683,7 @@ service cloud.firestore {
             && request.resource.data.applicationType == "support")
           || (currentUser().data.role == "mentor"
             && request.resource.data.applicationType == "mentorship")
-          || (currentUser().data.role == "sponsor"
-            && request.resource.data.applicationType == "sponsorship"
-            && get(/databases/$(database)/documents/sponsorProfiles/$(request.auth.uid)).data.approvalStatus == "approved")
+          || validSponsorCreate()
         )
         && request.resource.data.contactPreference in ["platform", "email", "phone"]
         && validOptionalText(request.resource.data.contributionDetails, 1000)
@@ -705,8 +712,10 @@ service cloud.firestore {
           "promotion", "company_visit"
         ])
         && request.resource.data.adminNote == ""
-        && request.resource.data.reviewedBy == null
-        && request.resource.data.reviewedAt == null
+        && !("reviewedBy" in request.resource.data)
+        && !("reviewedAt" in request.resource.data)
+        && !("approvedBy" in request.resource.data)
+        && !("approvedAt" in request.resource.data)
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time
         && get(/databases/$(database)/documents/ideas/$(request.resource.data.ideaId)).data.status == "approved"

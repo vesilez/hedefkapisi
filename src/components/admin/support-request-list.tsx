@@ -148,6 +148,17 @@ export function SupportRequestList() {
           : second.request.createdAt.localeCompare(first.request.createdAt),
       );
   }, [requests, search, sort, statusFilter, typeFilter]);
+
+  useEffect(() => {
+    console.log("[admin-support-requests] Applied UI filters", {
+      totalCount: requests.length,
+      sponsorshipCount: requests.filter(
+        (item) => item.request.applicationType === "sponsorship",
+      ).length,
+      filteredCount: filteredRequests.length,
+      filters: { status: statusFilter, type: typeFilter, search, sort },
+    });
+  }, [filteredRequests.length, requests, search, sort, statusFilter, typeFilter]);
   const safePage = Math.min(
     page,
     Math.max(1, Math.ceil(filteredRequests.length / pageSize)),
