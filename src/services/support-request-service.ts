@@ -220,7 +220,8 @@ export async function createSupportRequest(
     }
     if (
       applicationType === "sponsorship" &&
-      (!sponsorProfile.exists() || sponsorProfile.data().status !== "approved")
+      (!sponsorProfile.exists() ||
+        sponsorProfile.data().approvalStatus !== "approved")
     ) {
       return messageFailure(
         "Sponsorluk teklifi göndermek için kurum hesabınızın onaylanması gerekiyor.",

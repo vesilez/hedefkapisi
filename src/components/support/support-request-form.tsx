@@ -64,7 +64,6 @@ export function SupportRequestForm({ ideaId }: { ideaId: string }) {
   const [contributionDetails, setContributionDetails] = useState("");
   const [estimatedBudget, setEstimatedBudget] = useState("");
   const [resources, setResources] = useState("");
-  const [duration, setDuration] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -83,7 +82,10 @@ export function SupportRequestForm({ ideaId }: { ideaId: string }) {
         result.data.role !== "sponsor"
       ) {
         setAccessState("ineligible");
-      } else if (!result.data.profileCompleted) {
+      } else if (
+        result.data.role !== "sponsor" &&
+        !result.data.profileCompleted
+      ) {
         setAccessState("incomplete");
       } else {
         setEligibleRole(result.data.role);
@@ -121,7 +123,7 @@ export function SupportRequestForm({ ideaId }: { ideaId: string }) {
       contributionDetails: contributionDetails.trim() || null,
       sponsorshipOffer:
         eligibleRole === "sponsor"
-          ? { estimatedBudget, resources, duration }
+          ? { estimatedBudget, resources, duration: "Belirtilmedi" }
           : null,
     });
     if (!validation.success) {
@@ -226,8 +228,9 @@ export function SupportRequestForm({ ideaId }: { ideaId: string }) {
               className="mt-0.5 size-5 shrink-0"
             />
             <p className="font-semibold">
-              Destek başvurun alındı. Yönetim ekibi değerlendirdikten sonra
-              seninle iletişime geçilecek.
+              {eligibleRole === "sponsor"
+                ? "Sponsorluk teklifin alındı. Yönetim ekibi değerlendirdikten sonra seninle iletişime geçilecek."
+                : "Destek başvurun alındı. Yönetim ekibi değerlendirdikten sonra seninle iletişime geçilecek."}
             </p>
           </div>
         ) : !formOpen && eligibleRole ? (
@@ -332,24 +335,6 @@ export function SupportRequestForm({ ideaId }: { ideaId: string }) {
                     onChange={(event) => setEstimatedBudget(event.target.value)}
                   />
                 </div>
-                <div>
-                  <label
-                    htmlFor={`offer-duration-${ideaId}`}
-                    className="font-semibold text-slate-900"
-                  >
-                    Süre veya tarih aralığı
-                  </label>
-                  <Input
-                    id={`offer-duration-${ideaId}`}
-                    className="mt-2"
-                    value={duration}
-                    maxLength={200}
-                    required
-                    disabled={submitting}
-                    placeholder="Örn. Eylül-Aralık 2026"
-                    onChange={(event) => setDuration(event.target.value)}
-                  />
-                </div>
                 <div className="sm:col-span-2">
                   <label
                     htmlFor={`offer-resources-${ideaId}`}
@@ -398,7 +383,7 @@ export function SupportRequestForm({ ideaId }: { ideaId: string }) {
                   </Select>
                 </div>
               )}
-              <div>
+              {eligibleRole !== "sponsor" && <div>
                 <label
                   htmlFor={`contribution-details-${ideaId}`}
                   className="font-semibold text-slate-900"
@@ -421,7 +406,7 @@ export function SupportRequestForm({ ideaId }: { ideaId: string }) {
                 <p className="mt-1 text-sm text-slate-600">
                   {contributionDetails.length}/1000
                 </p>
-              </div>
+              </div>}
             </div>
 
             {error && (

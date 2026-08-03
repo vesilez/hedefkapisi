@@ -44,7 +44,6 @@ import {
   query,
   serverTimestamp,
   setDoc,
-  writeBatch,
   Timestamp,
   where,
   type Unsubscribe,
@@ -532,9 +531,8 @@ export async function createUserDocument(
 
     if (input.role === "sponsor" && input.sponsorProfile) {
       registrationStage = "committing-sponsor-user-and-profile";
-      const batch = writeBatch(db);
-      batch.set(doc(db, "users", input.uid), userDocument);
-      batch.set(doc(db, "sponsorProfiles", input.uid), {
+      await setDoc(doc(db, "users", input.uid), userDocument, { merge: true });
+      await setDoc(doc(db, "sponsorProfiles", input.uid), {
         sponsorId: input.uid,
         institutionName: input.sponsorProfile.organizationName,
         organizationName: input.sponsorProfile.organizationName,
@@ -544,17 +542,15 @@ export async function createUserDocument(
         website: input.sponsorProfile.website,
         city: input.sponsorProfile.city,
         supportAreas: input.sponsorProfile.supportAreas,
-        status: "pending",
         approvalStatus: "pending",
         reviewedBy: null,
         reviewedAt: null,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      });
-      await batch.commit();
+      }, { merge: true });
     } else {
       registrationStage = "creating-user-document";
-      await setDoc(doc(db, "users", input.uid), userDocument);
+      await setDoc(doc(db, "users", input.uid), userDocument, { merge: true });
     }
     console.log("USER DOC CREATED", {
       path: `users/${input.uid}`,

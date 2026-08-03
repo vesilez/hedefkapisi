@@ -31,11 +31,15 @@ export interface SponsorProfile {
   website: string | null;
   city: string;
   supportAreas: string[];
-  status: SponsorStatus;
+  approvalStatus: SponsorStatus;
   reviewedBy: string | null;
   reviewedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AdminSponsorApplication extends SponsorProfile {
+  email: string;
 }
 
 export interface SponsorSupport {

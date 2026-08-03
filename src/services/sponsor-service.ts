@@ -3,8 +3,7 @@ import "client-only";
 import { LEADERBOARD_POINTS } from "@/constants/leaderboard";
 import { IDEA_STAGES } from "@/constants/idea-stages";
 import { SUPPORT_TYPES } from "@/constants/support-types";
-import { USER_ROLES } from "@/constants/roles";
-import { grantAchievementInTransaction } from "@/services/achievement-service";
+import { isAdminRole, USER_ROLES } from "@/constants/roles";
 import { applyScoreInTransaction } from "@/services/leaderboard-service";
 import {
   createNotification,
@@ -12,7 +11,10 @@ import {
 } from "@/services/notification-service";
 import { auth } from "@/lib/firebase/auth";
 import { db } from "@/lib/firebase/firestore";
-import { getFirebaseErrorMessage } from "@/lib/firebase/firebase-error";
+import {
+  getFirebaseErrorCode,
+  getFirebaseErrorMessage,
+} from "@/lib/firebase/firebase-error";
 import {
   sponsorProfileInputSchema,
   sponsorSupportInputSchema,
@@ -20,6 +22,7 @@ import {
 } from "@/lib/validations/sponsor-schema";
 import type {
   SponsorDashboardData,
+  AdminSponsorApplication,
   SponsorIdeaFilters,
   SponsorOfferListItem,
   SponsorProfile,
@@ -30,6 +33,7 @@ import type { IdeaListItem } from "@/types/idea";
 import { getSupportRequestsByUser } from "@/services/support-request-service";
 import {
   collection,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -39,6 +43,7 @@ import {
   runTransaction,
   serverTimestamp,
   setDoc,
+  writeBatch,
   where,
   type DocumentData,
 } from "firebase/firestore";
@@ -68,7 +73,7 @@ const sponsorProfileSchema = z.object({
   website: z.string().nullable(),
   city: z.string(),
   supportAreas: z.array(z.string()),
-  status: z.enum(["pending", "approved", "rejected"]),
+  approvalStatus: z.enum(["pending", "approved", "rejected"]),
   reviewedBy: z.string().nullable(),
   reviewedAt: nullableTimestamp,
   createdAt: timestamp,
@@ -106,11 +111,28 @@ const ideaSchema = z.object({
 });
 
 function failure<T>(error: unknown): Result<T> {
+  console.error("[sponsor-service] Firebase operation failed", {
+    code: getFirebaseErrorCode(error) ?? "firebase/unknown",
+    message:
+      error instanceof Error ? error.message : getFirebaseErrorMessage(error),
+    error,
+  });
   return { success: false, error: { message: getFirebaseErrorMessage(error) } };
 }
 
 function parseProfile(id: string, data: DocumentData): SponsorProfile | null {
-  const parsed = sponsorProfileSchema.safeParse({ sponsorId: id, ...data });
+  const legacyApproval =
+    data.approvalStatus ??
+    (data.isApproved === true
+      ? "approved"
+      : data.isApproved === false
+        ? "pending"
+        : data.status);
+  const parsed = sponsorProfileSchema.safeParse({
+    sponsorId: id,
+    ...data,
+    approvalStatus: legacyApproval,
+  });
   return parsed.success ? parsed.data : null;
 }
 
@@ -119,7 +141,7 @@ export async function getApprovedSponsors(): Promise<Result<SponsorProfile[]>> {
     const snapshots = await getDocs(
       query(
         collection(db, "sponsorProfiles"),
-        where("status", "==", "approved"),
+        where("approvalStatus", "==", "approved"),
       ),
     );
     return {
@@ -168,7 +190,6 @@ export async function saveSponsorApplication(
         ...values,
         organizationName: values.institutionName,
         organizationType: "other",
-        status: "pending",
         approvalStatus: "pending",
         reviewedBy: null,
         reviewedAt: null,
@@ -271,18 +292,16 @@ export async function getSponsorDashboard(
   try {
     const userId = auth.currentUser?.uid;
     if (!userId) throw new Error("Oturum açmanız gerekiyor.");
-    const ownSnapshots = await getDocs(
-      query(
-        collection(db, "sponsorProfiles"),
-        where("sponsorId", "==", userId),
-      ),
-    );
-    const profileSnapshot = ownSnapshots.docs[0];
-    const profile = profileSnapshot
+    // Rules authorize an owner by the document id. A collection query filtered
+    // by sponsorId cannot prove that every possible result has that id, so it is
+    // rejected with permission-denied even for the owner. Read the canonical
+    // sponsorProfiles/{uid} document directly instead.
+    const profileSnapshot = await getDoc(doc(db, "sponsorProfiles", userId));
+    const profile = profileSnapshot.exists()
       ? parseProfile(profileSnapshot.id, profileSnapshot.data())
       : null;
     const [ideas, supports, offers] = await Promise.all([
-      profile?.status === "approved"
+      profile?.approvalStatus === "approved"
         ? getSponsorIdeas(filters)
         : Promise.resolve([]),
       profile ? getSupports(userId) : Promise.resolve([]),
@@ -339,7 +358,10 @@ export async function createOfficialSponsorSupport(input: {
         transaction.get(userRef),
         transaction.get(supportRef),
       ]);
-      if (!profileSnap.exists() || profileSnap.data().status !== "approved")
+      if (
+        !profileSnap.exists() ||
+        profileSnap.data().approvalStatus !== "approved"
+      )
         throw new Error("Sponsor hesabınız henüz onaylanmamış.");
       if (!ideaSnap.exists() || ideaSnap.data().status !== "approved")
         throw new Error("Hayal bulunamadı.");
@@ -387,19 +409,66 @@ export async function createOfficialSponsorSupport(input: {
 }
 
 export async function getPendingSponsorApplications(): Promise<
-  Result<SponsorProfile[]>
+  Result<AdminSponsorApplication[]>
 > {
   try {
+    const adminId = auth.currentUser?.uid;
+    if (!adminId) throw new Error("Oturum açmanız gerekiyor.");
+    const adminSnapshot = await getDoc(doc(db, "users", adminId));
+    if (!adminSnapshot.exists() || !isAdminRole(adminSnapshot.data().role)) {
+      throw new Error("Bu işlemi gerçekleştirmek için yetkiniz yok.");
+    }
     const snapshots = await getDocs(
       query(collection(db, "sponsorProfiles"), orderBy("createdAt", "desc")),
     );
-    return {
-      success: true,
-      data: snapshots.docs.flatMap((item) => {
-        const value = parseProfile(item.id, item.data());
-        return value ? [value] : [];
+    const profiles = snapshots.docs.flatMap((item) => {
+      const value = parseProfile(item.id, item.data());
+      return value ? [value] : [];
+    });
+
+    const applications = await Promise.all(
+      profiles.map(async (profile) => {
+        const userSnapshot = await getDoc(doc(db, "users", profile.sponsorId));
+        const email: unknown = userSnapshot.data()?.email;
+        return {
+          ...profile,
+          email: typeof email === "string" ? email : "E-posta bulunamadı",
+        };
       }),
-    };
+    );
+
+    const migration = writeBatch(db);
+    let migrationCount = 0;
+    for (const item of snapshots.docs) {
+      const data = item.data();
+      if (data.status !== undefined || data.isApproved !== undefined || data.approvalStatus === undefined) {
+        const profile = parseProfile(item.id, data);
+        if (profile) {
+          migration.set(item.ref, {
+            approvalStatus: profile.approvalStatus,
+            status: deleteField(),
+            isApproved: deleteField(),
+            updatedAt: serverTimestamp(),
+          }, { merge: true });
+          migrationCount += 1;
+        }
+      }
+    }
+    if (migrationCount > 0) {
+      try {
+        await migration.commit();
+      } catch (migrationError: unknown) {
+        console.error("[sponsor-service] Legacy sponsor migration failed", {
+          code: getFirebaseErrorCode(migrationError) ?? "firebase/unknown",
+          message:
+            migrationError instanceof Error
+              ? migrationError.message
+              : getFirebaseErrorMessage(migrationError),
+          error: migrationError,
+        });
+      }
+    }
+    return { success: true, data: applications };
   } catch (error: unknown) {
     return failure(error);
   }
@@ -412,31 +481,22 @@ export async function reviewSponsorApplication(
   try {
     const adminId = auth.currentUser?.uid;
     if (!adminId) throw new Error("Oturum açmanız gerekiyor.");
+    const adminSnapshot = await getDoc(doc(db, "users", adminId));
+    if (!adminSnapshot.exists() || !isAdminRole(adminSnapshot.data().role)) {
+      throw new Error("Bu işlemi gerçekleştirmek için yetkiniz yok.");
+    }
     await runTransaction(db, async (transaction) => {
       const profileRef = doc(db, "sponsorProfiles", sponsorId);
-      const userRef = doc(db, "users", sponsorId);
-      const userSnap = await transaction.get(userRef);
+      const profileSnapshot = await transaction.get(profileRef);
+      if (!profileSnapshot.exists()) {
+        throw new Error("Sponsor başvurusu bulunamadı.");
+      }
       transaction.update(profileRef, {
-        status,
         approvalStatus: status,
         reviewedBy: adminId,
         reviewedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
-      if (status === "approved" && userSnap.exists()) {
-        const granted = grantAchievementInTransaction(
-          transaction,
-          sponsorId,
-          userSnap.data(),
-          "sponsor_badge",
-        );
-        if (granted)
-          transaction.set(
-            doc(db, "leaderboard", sponsorId),
-            { achievementCount: increment(1), updatedAt: serverTimestamp() },
-            { merge: true },
-          );
-      }
     });
     await createNotification({
       userId: sponsorId,

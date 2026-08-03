@@ -676,7 +676,7 @@ service cloud.firestore {
             && request.resource.data.applicationType == "mentorship")
           || (currentUser().data.role == "sponsor"
             && request.resource.data.applicationType == "sponsorship"
-            && get(/databases/$(database)/documents/sponsorProfiles/$(request.auth.uid)).data.status == "approved")
+            && get(/databases/$(database)/documents/sponsorProfiles/$(request.auth.uid)).data.approvalStatus == "approved")
         )
         && request.resource.data.contactPreference in ["platform", "email", "phone"]
         && validOptionalText(request.resource.data.contributionDetails, 1000)
@@ -949,7 +949,7 @@ service cloud.firestore {
           && request.resource.data.supportAreas.size() >= 1
           && request.resource.data.supportAreas.size() <= 12;
       }
-      allow read: if resource.data.status == "approved"
+      allow read: if resource.data.approvalStatus == "approved"
         || (signedIn() && request.auth.uid == sponsorId)
         || isAdmin();
       allow create: if signedIn()
@@ -958,11 +958,10 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly([
           "sponsorId", "institutionName", "organizationName",
           "organizationType", "logoUrl", "description", "website", "city",
-          "supportAreas", "status", "approvalStatus", "reviewedBy",
+          "supportAreas", "approvalStatus", "reviewedBy",
           "reviewedAt", "createdAt", "updatedAt"
         ])
         && request.resource.data.sponsorId == sponsorId
-        && request.resource.data.status == "pending"
         && request.resource.data.approvalStatus == "pending"
         && request.resource.data.reviewedBy == null
         && request.resource.data.reviewedAt == null
@@ -974,10 +973,9 @@ service cloud.firestore {
           request.auth.uid == sponsorId
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             "institutionName", "logoUrl", "description", "website", "city",
-            "organizationName", "organizationType", "supportAreas", "status",
+            "organizationName", "organizationType", "supportAreas",
             "approvalStatus", "reviewedBy", "reviewedAt", "updatedAt"
           ])
-          && request.resource.data.status == "pending"
           && request.resource.data.approvalStatus == "pending"
           && request.resource.data.reviewedBy == null
           && request.resource.data.reviewedAt == null
@@ -988,12 +986,20 @@ service cloud.firestore {
           isAdmin()
           && request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly([
-              "status", "approvalStatus", "reviewedBy", "reviewedAt", "updatedAt"
+              "approvalStatus", "reviewedBy", "reviewedAt", "updatedAt"
             ])
-          && request.resource.data.status in ["approved", "rejected"]
-          && request.resource.data.approvalStatus == request.resource.data.status
+          && request.resource.data.approvalStatus in ["approved", "rejected"]
           && request.resource.data.reviewedBy == request.auth.uid
           && request.resource.data.reviewedAt == request.time
+          && request.resource.data.updatedAt == request.time
+        )
+        || (
+          isAdmin()
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(["status", "isApproved", "approvalStatus", "updatedAt"])
+          && request.resource.data.approvalStatus in ["pending", "approved", "rejected"]
+          && !("status" in request.resource.data)
+          && !("isApproved" in request.resource.data)
           && request.resource.data.updatedAt == request.time
         )
       );
@@ -1015,7 +1021,7 @@ service cloud.firestore {
         && request.resource.data.id == supportId
         && request.resource.data.sponsorId == request.auth.uid
         && supportId == request.auth.uid + "__" + request.resource.data.ideaId
-        && get(/databases/$(database)/documents/sponsorProfiles/$(request.auth.uid)).data.status == "approved"
+        && get(/databases/$(database)/documents/sponsorProfiles/$(request.auth.uid)).data.approvalStatus == "approved"
         && get(/databases/$(database)/documents/ideas/$(request.resource.data.ideaId)).data.status == "approved"
         && get(/databases/$(database)/documents/ideas/$(request.resource.data.ideaId)).data.studentId == request.resource.data.ideaOwnerId
         && request.resource.data.message is string

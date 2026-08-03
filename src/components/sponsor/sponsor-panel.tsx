@@ -26,6 +26,8 @@ import {
   Send,
 } from "lucide-react";
 import Link from "next/link";
+import { db } from "@/lib/firebase/firestore";
+import { doc, onSnapshot } from "firebase/firestore";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 
 export function SponsorPanel() {
@@ -63,6 +65,13 @@ export function SponsorPanel() {
       active = false;
     };
   }, [authLoading, user]);
+
+  useEffect(() => {
+    if (authLoading || !user) return;
+    return onSnapshot(doc(db, "sponsorProfiles", user.id), () => {
+      void load();
+    });
+  }, [authLoading, load, user]);
 
   if (authLoading || loading) {
     return <LoadingSpinner label="Sponsor paneli yükleniyor..." />;
@@ -109,9 +118,9 @@ export function SponsorPanel() {
             </p>
           </div>
           <Badge className="w-fit bg-white/15 text-white">
-            {data.profile.status === "approved"
+            {data.profile.approvalStatus === "approved"
               ? "Onaylı kurum"
-              : data.profile.status === "pending"
+              : data.profile.approvalStatus === "pending"
                 ? "Kurum onayı bekleniyor"
                 : "Kurum başvurusu reddedildi"}
           </Badge>
@@ -146,7 +155,7 @@ export function SponsorPanel() {
         </div>
       </section>
 
-      {data.profile.status !== "approved" ? (
+      {data.profile.approvalStatus !== "approved" ? (
         <Card>
           <p className="text-slate-700">
             Yeni sponsorluk teklifi araçları, kurum başvurunuz onaylandıktan
