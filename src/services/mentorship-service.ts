@@ -291,10 +291,11 @@ export async function respondToMentorshipRequest(
       });
 
       if (chatId) {
-        transaction.set(doc(db, "chats", chatId), {
+        transaction.set(doc(db, "conversations", chatId), {
           id: chatId,
           supportRequestId: mentorshipId,
           mentorshipId,
+          type: "mentorship",
           ideaId: mentorshipId,
           ideaTitle: `Mentorluk: ${
             typeof studentName === "string" ? studentName : "Öğrenci"
@@ -302,6 +303,7 @@ export async function respondToMentorshipRequest(
           ownerId: studentId,
           supporterId: mentorId,
           participantIds: [studentId, mentorId],
+          participantRoles: { [studentId]: "student", [mentorId]: "mentor" },
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
           lastMessage: null,
@@ -554,10 +556,11 @@ export async function updateMentorshipByAdmin(
           respondedAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
-        transaction.set(doc(db, "chats", chatId), {
+        transaction.set(doc(db, "conversations", chatId), {
           id: chatId,
           supportRequestId: mentorshipId,
           mentorshipId,
+          type: "mentorship",
           ideaId: mentorshipId,
           ideaTitle: `Mentorluk: ${
             typeof studentName === "string" ? studentName : "Öğrenci"
@@ -565,6 +568,7 @@ export async function updateMentorshipByAdmin(
           ownerId: studentId,
           supporterId: mentorId,
           participantIds: [studentId, mentorId],
+          participantRoles: { [studentId]: "student", [mentorId]: "mentor" },
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
           lastMessage: null,

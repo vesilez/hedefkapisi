@@ -846,8 +846,8 @@ service cloud.firestore {
             && isAdmin()
             && get(/databases/$(database)/documents/ideas/$(get(/databases/$(database)/documents/supportRequests/$(sourceId)).data.ideaId)).data.studentId == recipientId)
           || (type == "chat_message"
-            && actorId in get(/databases/$(database)/documents/chats/$(sourceId)).data.participantIds
-            && recipientId in get(/databases/$(database)/documents/chats/$(sourceId)).data.participantIds
+            && actorId in get(/databases/$(database)/documents/conversations/$(sourceId)).data.participantIds
+            && recipientId in get(/databases/$(database)/documents/conversations/$(sourceId)).data.participantIds
             && actorId != recipientId)
           || (type == "new_idea"
             && get(/databases/$(database)/documents/ideas/$(sourceId)).data.studentId == actorId
@@ -1041,66 +1041,86 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    match /chats/{chatId} {
+    match /conversations/{conversationId} {
       function participant() {
         return signedIn() && request.auth.uid in resource.data.participantIds;
       }
 
       allow read: if participant() || isAdmin();
-      allow create: if (
-        isAdmin()
-        && request.resource.data.id == chatId
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          "id", "participantIds", "participantRoles", "ideaId", "ideaTitle",
+          "supportRequestId", "mentorshipId", "type", "ownerId", "supporterId",
+          "lastMessage", "lastMessageAt", "unreadCounts", "createdAt", "updatedAt"
+        ])
+        && request.resource.data.id == conversationId
+        && request.resource.data.participantIds is list
         && request.resource.data.participantIds.size() == 2
+        && request.resource.data.participantRoles is map
+        && request.resource.data.participantRoles.keys().hasOnly(request.resource.data.participantIds)
+        && request.resource.data.participantRoles.keys().hasAll(request.resource.data.participantIds)
         && request.resource.data.ownerId in request.resource.data.participantIds
         && request.resource.data.supporterId in request.resource.data.participantIds
-        && getAfter(/databases/$(database)/documents/supportRequests/$(request.resource.data.supportRequestId)).data.status == "approved"
-      ) || (
-        signedIn()
-        && (roleIs("mentor") || isAdmin())
-        && request.resource.data.id == chatId
-        && request.resource.data.mentorshipId is string
-        && chatId == "mentorship__" + request.resource.data.mentorshipId
-        && getAfter(/databases/$(database)/documents/mentorships/$(request.resource.data.mentorshipId)).data.status == "active"
+        && request.resource.data.lastMessage == null
+        && request.resource.data.lastMessageAt == null
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
         && (
-          getAfter(/databases/$(database)/documents/mentorships/$(request.resource.data.mentorshipId)).data.mentorId == request.auth.uid
-          || isAdmin()
-        )
-        && request.resource.data.participantIds == [
-          getAfter(/databases/$(database)/documents/mentorships/$(request.resource.data.mentorshipId)).data.studentId,
-          request.auth.uid
-        ]
-      );
+          (isAdmin()
+            && conversationId == "support__" + request.resource.data.supportRequestId
+            && request.resource.data.mentorshipId == null
+            && request.resource.data.type in ["support", "mentorship", "sponsorship"]
+            && getAfter(/databases/$(database)/documents/supportRequests/$(request.resource.data.supportRequestId)).data.status == "approved"
+            && request.resource.data.supporterId == getAfter(/databases/$(database)/documents/supportRequests/$(request.resource.data.supportRequestId)).data.supporterId
+            && request.resource.data.ownerId == getAfter(/databases/$(database)/documents/ideas/$(request.resource.data.ideaId)).data.studentId
+            && request.resource.data.participantIds.hasAll([request.resource.data.ownerId, request.resource.data.supporterId])
+            && request.resource.data.participantRoles.get(request.resource.data.ownerId, "") == "student"
+            && request.resource.data.participantRoles.get(request.resource.data.supporterId, "") == getAfter(/databases/$(database)/documents/supportRequests/$(request.resource.data.supportRequestId)).data.applicantRole)
+          || ((roleIs("mentor") || isAdmin())
+            && conversationId == "mentorship__" + request.resource.data.mentorshipId
+            && request.resource.data.supportRequestId == request.resource.data.mentorshipId
+            && request.resource.data.type == "mentorship"
+            && getAfter(/databases/$(database)/documents/mentorships/$(request.resource.data.mentorshipId)).data.status == "active"
+            && request.resource.data.ownerId == getAfter(/databases/$(database)/documents/mentorships/$(request.resource.data.mentorshipId)).data.studentId
+            && request.resource.data.supporterId == getAfter(/databases/$(database)/documents/mentorships/$(request.resource.data.mentorshipId)).data.mentorId
+            && request.resource.data.participantRoles.get(request.resource.data.ownerId, "") == "student"
+            && request.resource.data.participantRoles.get(request.resource.data.supporterId, "") == "mentor")
+        );
       allow update: if participant()
         && request.resource.data.participantIds == resource.data.participantIds
+        && request.resource.data.participantRoles == resource.data.participantRoles
+        && request.resource.data.ideaId == resource.data.ideaId
+        && request.resource.data.supportRequestId == resource.data.supportRequestId
+        && request.resource.data.mentorshipId == resource.data.mentorshipId
+        && request.resource.data.type == resource.data.type
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           "lastMessage", "lastMessageAt", "updatedAt", "unreadCounts"
         ]);
       allow delete: if false;
 
       match /messages/{messageId} {
-        function chat() {
-          return get(/databases/$(database)/documents/chats/$(chatId));
+        function conversation() {
+          return get(/databases/$(database)/documents/conversations/$(conversationId));
         }
 
         allow read: if signedIn()
-          && (request.auth.uid in chat().data.participantIds || isAdmin());
+          && (request.auth.uid in conversation().data.participantIds || isAdmin());
         allow create: if signedIn()
           && !isAdmin()
           && request.resource.data.keys().hasOnly([
-            "id", "chatId", "senderId", "senderName", "content",
-            "createdAt", "readBy"
+            "id", "senderId", "text", "createdAt", "readBy", "status"
           ])
-          && request.auth.uid in chat().data.participantIds
+          && request.auth.uid in conversation().data.participantIds
           && request.resource.data.id == messageId
-          && request.resource.data.chatId == chatId
           && request.resource.data.senderId == request.auth.uid
           && request.resource.data.readBy == [request.auth.uid]
-          && request.resource.data.content is string
-          && request.resource.data.content.size() > 0
-          && request.resource.data.content.size() <= 2000
-          && safeUserText(request.resource.data.content, 1, 2000);
+          && request.resource.data.status == "sent"
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 2000
+          && safeUserText(request.resource.data.text, 1, 2000);
         allow update: if signedIn()
-          && request.auth.uid in chat().data.participantIds
+          && request.auth.uid in conversation().data.participantIds
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["readBy"])
           && request.resource.data.readBy.hasAll(resource.data.readBy)
           && request.resource.data.readBy.hasAll([request.auth.uid]);

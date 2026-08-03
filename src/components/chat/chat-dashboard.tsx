@@ -8,6 +8,7 @@ import { isAdminRole, type UserRole } from "@/constants/roles";
 import { useAuth } from "@/hooks/use-auth";
 import {
   markChatMessagesAsRead,
+  backfillApprovedConversations,
   sendChatMessage,
   subscribeToChatMessages,
   subscribeToChats,
@@ -95,7 +96,7 @@ export function ChatDashboard() {
 
     let unsubscribe: (() => void) | undefined;
     let active = true;
-    void getUserAccessProfile(user.id).then((profileResult) => {
+    void getUserAccessProfile(user.id).then(async (profileResult) => {
       if (!active) return;
       if (!profileResult.success || !profileResult.data) {
         setError("Kullanıcı yetkileri okunamadı.");
@@ -103,6 +104,9 @@ export function ChatDashboard() {
         return;
       }
       setRole(profileResult.data.role);
+      if (isAdminRole(profileResult.data.role)) {
+        await backfillApprovedConversations(user.id);
+      }
       unsubscribe = subscribeToChats(
         user.id,
         profileResult.data.role,
@@ -310,7 +314,7 @@ export function ChatDashboard() {
             {chats.length === 0 ? (
               <EmptyState
                 className="m-4 py-8"
-                title="Henüz sohbetin yok"
+                title="Henüz konuşmanız yok."
                 description="Bir destek başvurusu onaylandığında sohbet burada görünecek."
                 icon={MessageCircle}
               />
@@ -458,11 +462,11 @@ export function ChatDashboard() {
                             >
                               {!isOwn && (
                                 <p className="mb-1 text-xs font-bold text-blue-700">
-                                  {message.senderName}
+                                  Katılımcı
                                 </p>
                               )}
                               <p className="whitespace-pre-wrap break-words text-sm leading-6">
-                                {message.content}
+                                {message.text}
                               </p>
                               <time
                                 className={`mt-1 block text-right text-[10px] ${

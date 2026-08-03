@@ -8,6 +8,9 @@ export interface Chat {
   ownerId: string;
   supporterId: string;
   participantIds: string[];
+  participantRoles: Record<string, "student" | "supporter" | "mentor" | "sponsor">;
+  mentorshipId: Nullable<string>;
+  type: "support" | "mentorship" | "sponsorship";
   createdAt: ISODateString;
   updatedAt: ISODateString;
   lastMessage: Nullable<string>;
@@ -17,10 +20,9 @@ export interface Chat {
 
 export interface ChatMessage {
   id: string;
-  chatId: string;
   senderId: string;
-  senderName: string;
-  content: string;
+  text: string;
   createdAt: ISODateString;
   readBy: string[];
+  status: "sent";
 }

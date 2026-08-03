@@ -133,7 +133,7 @@ export async function reconcileUserAchievements(
 
   const chats = await getDocs(
     query(
-      collection(db, "chats"),
+      collection(db, "conversations"),
       where("participantIds", "array-contains", userId),
       limit(1),
     ),

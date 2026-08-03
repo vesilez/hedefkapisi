@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { mainNavigation } from "@/config/navigation";
 import { siteConfig } from "@/config/site";
 import { getUserAccessProfile } from "@/services/user-service";
+import { subscribeToChats } from "@/services/chat-service";
 import type { UserRole } from "@/constants/roles";
 import { PageContainer } from "./page-container";
 import { NotificationBell } from "./notification-bell";
@@ -18,6 +19,7 @@ export function SiteHeader() {
   const pathname = usePathname();
   const { user, loading, logout } = useAuth();
   const [loggingOut, setLoggingOut] = useState(false);
+  const [messageUnreadCount, setMessageUnreadCount] = useState(0);
   const mobileMenuRef = useRef<HTMLDetailsElement>(null);
   const [profileAccess, setProfileAccess] = useState<{
     userId: string;
@@ -29,16 +31,30 @@ export function SiteHeader() {
     if (!user) return;
 
     let active = true;
+    let unsubscribe: (() => void) | undefined;
     void getUserAccessProfile(user.id).then((result) => {
       if (!active) return;
       setProfileAccess({
         userId: user.id,
         role: result.success ? (result.data?.role ?? null) : null,
       });
+      if (result.success && result.data) {
+        unsubscribe = subscribeToChats(user.id, result.data.role, (chats) => {
+          if (!active || !chats.success) return;
+          setMessageUnreadCount(
+            chats.data.reduce(
+              (total, conversation) =>
+                total + (conversation.unreadCounts[user.id] ?? 0),
+              0,
+            ),
+          );
+        });
+      }
     });
 
     return () => {
       active = false;
+      unsubscribe?.();
     };
   }, [loading, user]);
 
@@ -140,6 +156,11 @@ export function SiteHeader() {
                 >
                   <MessageCircle aria-hidden="true" className="size-4" />
                   Mesajlar
+                  {messageUnreadCount > 0 && (
+                    <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-xs text-white">
+                      {messageUnreadCount > 99 ? "99+" : messageUnreadCount}
+                    </span>
+                  )}
                 </Link>
                 <Link
                   href="/profil"

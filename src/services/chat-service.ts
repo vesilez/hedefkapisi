@@ -3,7 +3,10 @@ import "client-only";
 import { isAdminRole, isUserRole, type UserRole } from "@/constants/roles";
 import { auth } from "@/lib/firebase/auth";
 import { db } from "@/lib/firebase/firestore";
-import { getFirebaseErrorMessage } from "@/lib/firebase/firebase-error";
+import {
+  getFirebaseErrorCode,
+  getFirebaseErrorMessage,
+} from "@/lib/firebase/firebase-error";
 import { chatMessageContentSchema } from "@/lib/validations/chat-schema";
 import { createNotification } from "@/services/notification-service";
 import { grantAchievementInTransaction } from "@/services/achievement-service";
@@ -15,7 +18,9 @@ import {
   getDoc,
   getDocs,
   increment,
+  limit,
   onSnapshot,
+  orderBy,
   query,
   runTransaction,
   serverTimestamp,
@@ -29,7 +34,8 @@ import {
 import { z } from "zod";
 
 export type ChatServiceResult<T> =
-  { success: true; data: T } | { success: false; error: { message: string } };
+  | { success: true; data: T }
+  | { success: false; error: { code: string; message: string } };
 
 const timestampSchema = z.unknown().transform((value, context) => {
   if (
@@ -55,6 +61,9 @@ const chatSchema = z.object({
   ownerId: z.string().min(1),
   supporterId: z.string().min(1),
   participantIds: z.array(z.string().min(1)).length(2),
+  participantRoles: z.record(z.string(), z.enum(["student", "supporter", "mentor", "sponsor"])),
+  mentorshipId: z.string().nullable().default(null),
+  type: z.enum(["support", "mentorship", "sponsorship"]),
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
   lastMessage: z.string().nullable(),
@@ -64,23 +73,39 @@ const chatSchema = z.object({
 
 const messageSchema = z.object({
   id: z.string().min(1),
-  chatId: z.string().min(1),
   senderId: z.string().min(1),
-  senderName: z.string().min(1),
-  content: z.string().min(1).max(2000),
+  text: z.string().min(1).max(2000),
   createdAt: timestampSchema,
   readBy: z.array(z.string().min(1)),
+  status: z.literal("sent"),
 });
 
-function failure<T>(error: unknown): ChatServiceResult<T> {
+function failure<T>(
+  error: unknown,
+  operation = "unknown",
+  path: string | null = null,
+): ChatServiceResult<T> {
+  const code = getFirebaseErrorCode(error) ?? "chat/unknown";
+  const rawMessage = error instanceof Error ? error.message : String(error);
+  console.error("[chat-service] Firebase operation failed", {
+    operation,
+    path,
+    authUid: auth.currentUser?.uid ?? null,
+    code,
+    message: rawMessage,
+    firebaseError: error,
+  });
   return {
     success: false,
-    error: { message: getFirebaseErrorMessage(error) },
+    error: {
+      code,
+      message: `${operation}: ${getFirebaseErrorMessage(error)} (${code}: ${rawMessage})`,
+    },
   };
 }
 
 function messageFailure<T>(message: string): ChatServiceResult<T> {
-  return { success: false, error: { message } };
+  return { success: false, error: { code: "chat/invalid-state", message } };
 }
 
 function parseChat(
@@ -117,7 +142,7 @@ async function authorizeChatRead(
 
   try {
     const [chatSnapshot, role] = await Promise.all([
-      getDoc(doc(db, "chats", chatId)),
+      getDoc(doc(db, "conversations", chatId)),
       getCurrentRole(userId),
     ]);
     if (!chatSnapshot.exists() || !role) {
@@ -130,7 +155,7 @@ async function authorizeChatRead(
     }
     return { success: true, data: { chat: parsed.data, role } };
   } catch (error: unknown) {
-    return failure(error);
+    return failure(error, "getConversation", `conversations/${chatId}`);
   }
 }
 
@@ -145,9 +170,9 @@ export function subscribeToChats(
   }
 
   const chatsQuery = isAdminRole(role)
-    ? query(collection(db, "chats"))
+    ? query(collection(db, "conversations"))
     : query(
-        collection(db, "chats"),
+        collection(db, "conversations"),
         where("participantIds", "array-contains", userId),
       );
 
@@ -176,8 +201,68 @@ export function subscribeToChats(
       );
       listener({ success: true, data: chats });
     },
-    (error: unknown) => listener(failure(error)),
+    (error: unknown) => {
+      const failed = failure<Chat[]>(
+        error,
+        "getConversations",
+        "conversations",
+      );
+      if (
+        role === "sponsor" &&
+        getFirebaseErrorCode(error)?.includes("permission-denied")
+      ) {
+        void loadSponsorConversationsFallback(userId).then(listener);
+        return;
+      }
+      listener(failed);
+    },
   );
+}
+
+async function loadSponsorConversationsFallback(
+  sponsorId: string,
+): Promise<ChatServiceResult<Chat[]>> {
+  try {
+    const requests = await getDocs(
+      query(
+        collection(db, "supportRequests"),
+        where("supporterId", "==", sponsorId),
+        where("applicationType", "==", "sponsorship"),
+        where("status", "==", "approved"),
+      ),
+    );
+    const conversations = await Promise.all(
+      requests.docs.map((request) =>
+        getDoc(doc(db, "conversations", `support__${request.id}`)),
+      ),
+    );
+    const parsed: Chat[] = [];
+    for (const snapshot of conversations) {
+      if (!snapshot.exists()) continue;
+      const conversation = parseChat(snapshot);
+      if (!conversation.success) return conversation;
+      if (conversation.data.participantIds.includes(sponsorId)) {
+        parsed.push(conversation.data);
+      }
+    }
+    parsed.sort((first, second) =>
+      (second.lastMessageAt ?? second.updatedAt).localeCompare(
+        first.lastMessageAt ?? first.updatedAt,
+      ),
+    );
+    console.warn("[chat-service] Sponsor conversation list fallback used", {
+      sponsorId,
+      approvedRequestCount: requests.size,
+      conversationCount: parsed.length,
+    });
+    return { success: true, data: parsed };
+  } catch (error: unknown) {
+    return failure(
+      error,
+      "getSponsorConversationsFallback",
+      "supportRequests + conversations",
+    );
+  }
 }
 
 export async function subscribeToChatMessages(
@@ -192,7 +277,11 @@ export async function subscribeToChatMessages(
   }
 
   return onSnapshot(
-    collection(db, "chats", chatId, "messages"),
+    query(
+      collection(db, "conversations", chatId, "messages"),
+      orderBy("createdAt", "desc"),
+      limit(100),
+    ),
     (snapshots) => {
       const messages: ChatMessage[] = [];
       for (const snapshot of snapshots.docs) {
@@ -211,7 +300,14 @@ export async function subscribeToChatMessages(
       );
       listener({ success: true, data: messages });
     },
-    (error: unknown) => listener(failure(error)),
+    (error: unknown) =>
+      listener(
+        failure(
+          error,
+          "getMessages",
+          `conversations/${chatId}/messages`,
+        ),
+      ),
   );
 }
 
@@ -226,7 +322,7 @@ export async function markChatMessagesAsRead(
   }
 
   try {
-    const messages = await getDocs(collection(db, "chats", chatId, "messages"));
+    const messages = await getDocs(collection(db, "conversations", chatId, "messages"));
     const unread = messages.docs.filter((message) => {
       const readBy: unknown = message.data().readBy;
       return (
@@ -250,14 +346,14 @@ export async function markChatMessagesAsRead(
       });
     }
     batch.update(
-      doc(db, "chats", chatId),
+      doc(db, "conversations", chatId),
       new FieldPath("unreadCounts", userId),
       0,
     );
     await batch.commit();
     return { success: true, data: undefined };
   } catch (error: unknown) {
-    return failure(error);
+    return failure(error, "markMessagesAsRead", `conversations/${chatId}`);
   }
 }
 
@@ -276,9 +372,9 @@ export async function sendChatMessage(
     return messageFailure("Mesaj göndermek için oturum açmalısın.");
 
   try {
-    const messageReference = doc(collection(db, "chats", chatId, "messages"));
+    const messageReference = doc(collection(db, "conversations", chatId, "messages"));
     const result = await runTransaction(db, async (transaction) => {
-      const chatReference = doc(db, "chats", chatId);
+      const chatReference = doc(db, "conversations", chatId);
       const userReference = doc(db, "users", senderId);
       const [chatSnapshot, userSnapshot] = await Promise.all([
         transaction.get(chatReference),
@@ -298,28 +394,17 @@ export async function sendChatMessage(
         throw new Error("chat/forbidden");
       }
 
-      const name: unknown = userSnapshot.data().name;
-      const surname: unknown = userSnapshot.data().surname;
-      const senderName =
-        [name, surname]
-          .filter(
-            (value): value is string =>
-              typeof value === "string" && value.trim().length > 0,
-          )
-          .map((value) => value.trim())
-          .join(" ") || "Kullanıcı";
       const recipientIds = parsedChat.data.participantIds.filter(
         (participantId) => participantId !== senderId,
       );
 
       transaction.set(messageReference, {
         id: messageReference.id,
-        chatId,
         senderId,
-        senderName,
-        content: validation.data,
+        text: validation.data,
         createdAt: serverTimestamp(),
         readBy: [senderId],
+        status: "sent",
       });
 
       const unreadUpdates = Object.fromEntries(
@@ -342,7 +427,6 @@ export async function sendChatMessage(
       );
       return {
         chat: parsedChat.data,
-        senderName,
         recipientIds,
       };
     });
@@ -353,7 +437,7 @@ export async function sendChatMessage(
           userId: recipientId,
           sourceId: chatId,
           title: "Yeni mesaj",
-          message: `${result.senderName}, "${result.chat.ideaTitle}" sohbetine yeni bir mesaj gönderdi.`,
+          message: `"${result.chat.ideaTitle}" görüşmesine yeni bir mesaj geldi.`,
           type: "chat_message",
           targetUrl: `/mesajlar?sohbet=${chatId}`,
         }),
@@ -372,6 +456,81 @@ export async function sendChatMessage(
         return messageFailure("Sohbet bulunamadı.");
       }
     }
-    return failure(error);
+    return failure(error, "sendMessage", `conversations/${chatId}/messages`);
+  }
+}
+
+export async function backfillApprovedConversations(
+  adminId: string,
+): Promise<ChatServiceResult<number>> {
+  if (!adminId || auth.currentUser?.uid !== adminId) {
+    return messageFailure("Backfill için yönetici oturumu gerekli.");
+  }
+  try {
+    const role = await getCurrentRole(adminId);
+    if (!role || !isAdminRole(role)) {
+      return messageFailure("Backfill için yönetici yetkisi gerekli.");
+    }
+    const [supportRequests, mentorships] = await Promise.all([
+      getDocs(query(collection(db, "supportRequests"), where("status", "==", "approved"))),
+      getDocs(query(collection(db, "mentorships"), where("status", "==", "active"))),
+    ]);
+    const batch = writeBatch(db);
+    let created = 0;
+
+    for (const request of supportRequests.docs) {
+      const data = request.data();
+      const ownerId: unknown = (await getDoc(doc(db, "ideas", data.ideaId))).data()?.studentId;
+      if (typeof ownerId !== "string" || typeof data.supporterId !== "string") continue;
+      const conversationId = `support__${request.id}`;
+      if ((await getDoc(doc(db, "conversations", conversationId))).exists()) continue;
+      batch.set(doc(db, "conversations", conversationId), {
+        id: conversationId,
+        participantIds: [ownerId, data.supporterId],
+        participantRoles: { [ownerId]: "student", [data.supporterId]: data.applicantRole },
+        ideaId: data.ideaId,
+        ideaTitle: "Onaylı destek görüşmesi",
+        supportRequestId: request.id,
+        mentorshipId: null,
+        type: data.applicationType,
+        ownerId,
+        supporterId: data.supporterId,
+        lastMessage: null,
+        lastMessageAt: null,
+        unreadCounts: { [ownerId]: 0, [data.supporterId]: 0 },
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      created += 1;
+    }
+
+    for (const mentorship of mentorships.docs) {
+      const data = mentorship.data();
+      if (typeof data.studentId !== "string" || typeof data.mentorId !== "string") continue;
+      const conversationId = `mentorship__${mentorship.id}`;
+      if ((await getDoc(doc(db, "conversations", conversationId))).exists()) continue;
+      batch.set(doc(db, "conversations", conversationId), {
+        id: conversationId,
+        participantIds: [data.studentId, data.mentorId],
+        participantRoles: { [data.studentId]: "student", [data.mentorId]: "mentor" },
+        ideaId: mentorship.id,
+        ideaTitle: `Mentorluk: ${data.studentName ?? "Öğrenci"}`,
+        supportRequestId: mentorship.id,
+        mentorshipId: mentorship.id,
+        type: "mentorship",
+        ownerId: data.studentId,
+        supporterId: data.mentorId,
+        lastMessage: null,
+        lastMessageAt: null,
+        unreadCounts: { [data.studentId]: 0, [data.mentorId]: 0 },
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      created += 1;
+    }
+    if (created > 0) await batch.commit();
+    return { success: true, data: created };
+  } catch (error: unknown) {
+    return failure(error, "backfillConversations", "conversations");
   }
 }

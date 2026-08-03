@@ -593,12 +593,13 @@ async function reviewSupportRequest(
 
         const isSponsorship =
           snapshot.data().applicationType === "sponsorship";
-        if (status === "approved" && !isSponsorship) {
+        if (status === "approved") {
           if (!supporterId || !ideaId) {
             throw new Error("support-request/invalid-participants");
           }
           const ideaReference = doc(db, "ideas", ideaId);
-          const chatReference = doc(db, "chats", requestId);
+          const conversationId = `support__${requestId}`;
+          const chatReference = doc(db, "conversations", conversationId);
           const [ideaSnapshot, chatSnapshot, supporterSnapshot] =
             await Promise.all([
               transaction.get(ideaReference),
@@ -619,16 +620,22 @@ async function reviewSupportRequest(
             throw new Error("support-request/invalid-participants");
           }
 
-          chatId = requestId;
+          chatId = conversationId;
           if (!chatSnapshot.exists()) {
             transaction.set(chatReference, {
-              id: chatId,
+              id: conversationId,
               supportRequestId: requestId,
+              mentorshipId: null,
+              type: isSponsorship ? "sponsorship" : snapshot.data().applicationType,
               ideaId,
               ideaTitle,
               ownerId,
               supporterId,
               participantIds: [ownerId, supporterId],
+              participantRoles: {
+                [ownerId]: "student",
+                [supporterId]: snapshot.data().applicantRole,
+              },
               createdAt: serverTimestamp(),
               updatedAt: serverTimestamp(),
               lastMessage: null,
@@ -639,20 +646,22 @@ async function reviewSupportRequest(
               },
             });
           }
-          const achievementGranted = grantAchievementInTransaction(
-            transaction,
-            supporterId,
-            supporterSnapshot.data(),
-            "first_support",
-          );
-          applyScoreInTransaction(
-            transaction,
-            supporterSnapshot,
-            "completed_support",
-            requestId,
-            LEADERBOARD_POINTS.supportCompleted,
-            achievementGranted ? 1 : 0,
-          );
+          if (!isSponsorship) {
+            const achievementGranted = grantAchievementInTransaction(
+              transaction,
+              supporterId,
+              supporterSnapshot.data(),
+              "first_support",
+            );
+            applyScoreInTransaction(
+              transaction,
+              supporterSnapshot,
+              "completed_support",
+              requestId,
+              LEADERBOARD_POINTS.supportCompleted,
+              achievementGranted ? 1 : 0,
+            );
+          }
         }
 
         transaction.update(reference, {
