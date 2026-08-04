@@ -3,6 +3,7 @@ import "client-only";
 import { auth } from "@/lib/firebase/auth";
 import { db } from "@/lib/firebase/firestore";
 import { meetingSchema } from "@/lib/validations/meeting-schema";
+import { createNotification } from "@/services/notification-service";
 import type { Meeting, MeetingStatus } from "@/types/meeting";
 import {
   collection,
@@ -97,6 +98,20 @@ export async function createMeeting(input: unknown): Promise<Result<string>> {
       payload,
     });
     await setDoc(reference, payload);
+    await Promise.all(
+      conversationData.participantIds
+        .filter((participantId: string) => participantId !== user.uid)
+        .map((participantId: string) =>
+          createNotification({
+            userId: participantId,
+            sourceId: reference.id,
+            title: "Yeni toplantı oluşturuldu",
+            message: `“${parsed.data.title}” toplantısı takviminize eklendi.`,
+            type: "meeting_created",
+            link: `/takvim/${reference.id}`,
+          }),
+        ),
+    );
     return { success: true, data: reference.id };
   } catch (error) {
     return failure(error, "createMeeting");

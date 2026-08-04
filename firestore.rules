@@ -839,15 +839,19 @@ service cloud.firestore {
           || (type in ["idea_approved", "idea_rejected"]
             && isAdmin()
             && get(/databases/$(database)/documents/ideas/$(sourceId)).data.studentId == recipientId)
-          || (type in ["support_request_approved", "support_request_rejected"]
+          || (type in ["support_approved", "support_rejected", "support_request_approved", "support_request_rejected"]
             && isAdmin()
             && get(/databases/$(database)/documents/supportRequests/$(sourceId)).data.supporterId == recipientId)
           || (type in ["sponsorship_offer_approved", "sponsorship_offer_rejected"]
             && isAdmin()
             && get(/databases/$(database)/documents/ideas/$(get(/databases/$(database)/documents/supportRequests/$(sourceId)).data.ideaId)).data.studentId == recipientId)
-          || (type == "chat_message"
+          || (type in ["new_message", "chat_message"]
             && actorId in get(/databases/$(database)/documents/conversations/$(sourceId)).data.participantIds
             && recipientId in get(/databases/$(database)/documents/conversations/$(sourceId)).data.participantIds
+            && actorId != recipientId)
+          || (type == "meeting_created"
+            && get(/databases/$(database)/documents/meetings/$(sourceId)).data.organizerId == actorId
+            && recipientId in get(/databases/$(database)/documents/meetings/$(sourceId)).data.participantIds
             && actorId != recipientId)
           || (type == "new_idea"
             && get(/databases/$(database)/documents/ideas/$(sourceId)).data.studentId == actorId
@@ -870,11 +874,12 @@ service cloud.firestore {
       allow create: if signedIn()
         && request.resource.data.keys().hasOnly([
           "id", "userId", "actorId", "sourceId", "title", "message", "type",
-          "targetUrl", "isRead", "createdAt"
+          "link", "read", "createdAt"
         ])
         && request.resource.data.id == notificationId
         && request.resource.data.actorId == request.auth.uid
-        && request.resource.data.isRead == false
+        && request.resource.data.read == false
+        && (request.resource.data.link == null || request.resource.data.link is string)
         && request.resource.data.title is string
         && request.resource.data.title.size() <= 120
         && request.resource.data.message is string
@@ -883,8 +888,8 @@ service cloud.firestore {
       allow read: if signedIn() && resource.data.userId == request.auth.uid;
       allow update: if signedIn()
         && resource.data.userId == request.auth.uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["isRead"])
-        && request.resource.data.isRead == true;
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["read"])
+        && request.resource.data.read == true;
       allow delete: if false;
     }
 

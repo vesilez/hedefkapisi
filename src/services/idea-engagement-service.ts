@@ -313,7 +313,7 @@ export async function toggleIdeaLike(
         title: "Hayalin beğenildi",
         message: `"${result.title}" başlıklı hayalin beğenildi.`,
         type: "idea_liked",
-        targetUrl: result.slug ? `/hayaller/${result.slug}` : "/fikirlerim",
+        link: result.slug ? `/hayaller/${result.slug}` : "/fikirlerim",
       });
       if (!notification.success) {
         console.error(

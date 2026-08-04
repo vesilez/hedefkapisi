@@ -428,18 +428,19 @@ export async function sendChatMessage(
       return {
         chat: parsedChat.data,
         recipientIds,
+        isFirstMessage: parsedChat.data.lastMessage === null,
       };
     });
 
-    await Promise.all(
+    if (result.isFirstMessage) await Promise.all(
       result.recipientIds.map((recipientId) =>
         createNotification({
           userId: recipientId,
           sourceId: chatId,
           title: "Yeni mesaj",
           message: `"${result.chat.ideaTitle}" görüşmesine yeni bir mesaj geldi.`,
-          type: "chat_message",
-          targetUrl: `/mesajlar?sohbet=${chatId}`,
+          type: "new_message",
+          link: `/mesajlar?sohbet=${chatId}`,
         }),
       ),
     );

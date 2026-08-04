@@ -1,7 +1,17 @@
 import type { ISODateString } from "./common";
 
 export const NOTIFICATION_TYPES = [
+  "support_request",
+  "support_approved",
+  "support_rejected",
+  "new_message",
+  "meeting_created",
+  "meeting_updated",
+  "meeting_cancelled",
+  "meeting_reminder",
   "idea_approved",
+  "mentor_request",
+  // Legacy event names are kept so existing documents remain readable.
   "idea_rejected",
   "support_request_received",
   "support_request_approved",
@@ -26,7 +36,7 @@ export interface Notification {
   title: string;
   message: string;
   type: NotificationType;
-  targetUrl: string | null;
-  isRead: boolean;
+  link: string | null;
+  read: boolean;
   createdAt: ISODateString;
 }

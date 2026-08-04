@@ -231,7 +231,7 @@ export async function createIdeaComment(
         title: "Hayaline yeni yorum geldi",
         message: `${userName}, "${typeof idea.data().title === "string" ? idea.data().title : "hayalin"}" için yorum yaptı.`,
         type: "idea_comment",
-        targetUrl:
+        link:
           typeof ideaSlug === "string" && ideaSlug
             ? `/hayaller/${ideaSlug}`
             : "/fikirlerim",

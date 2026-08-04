@@ -203,7 +203,7 @@ export async function saveSponsorApplication(
       type: "admin_activity",
       title: "Yeni sponsor başvurusu",
       message: `${values.institutionName} onay bekliyor.`,
-      targetUrl: "/admin/sponsorlar",
+      link: "/admin/sponsorlar",
     });
     return { success: true, data: undefined };
   } catch (error: unknown) {
@@ -400,7 +400,7 @@ export async function createOfficialSponsorSupport(input: {
       type: "sponsor_support_received",
       title: "Resmî sponsor desteği aldınız",
       message: `${institutionName}, “${title}” hayalinize resmî destek verdi.`,
-      targetUrl: `/hayaller/${ideaSlug}`,
+      link: `/hayaller/${ideaSlug}`,
     });
     return { success: true, data: undefined };
   } catch (error: unknown) {
@@ -510,7 +510,7 @@ export async function reviewSponsorApplication(
         status === "approved"
           ? "Sponsor paneliniz ve resmî destek özellikleri kullanıma açıldı."
           : "Başvurunuz reddedildi; bilgilerinizi güncelleyerek yeniden gönderebilirsiniz.",
-      targetUrl: "/sponsor/dashboard",
+      link: "/sponsor/dashboard",
     });
     return { success: true, data: undefined };
   } catch (error: unknown) {

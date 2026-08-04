@@ -16,7 +16,9 @@ import {
   doc,
   getDoc,
   getDocs,
+  limit,
   onSnapshot,
+  orderBy,
   query,
   serverTimestamp,
   setDoc,
@@ -35,7 +37,7 @@ export interface CreateNotificationInput {
   title: string;
   message: string;
   type: NotificationType;
-  targetUrl?: `/${string}`;
+  link?: `/${string}`;
 }
 
 const timestampSchema = z.unknown().transform((value, context) => {
@@ -61,14 +63,22 @@ const notificationSchema = z.object({
   title: z.string(),
   message: z.string(),
   type: z.enum(NOTIFICATION_TYPES),
-  targetUrl: z
-    .string()
-    .regex(/^\/(?!\/)/)
-    .nullable()
-    .default(null),
-  isRead: z.boolean(),
+  link: z.string().regex(/^\/(?!\/)/).nullable().optional(),
+  read: z.boolean().optional(),
+  // Deployed v1 documents are normalized while new writes use link/read.
+  targetUrl: z.string().regex(/^\/(?!\/)/).nullable().optional(),
+  isRead: z.boolean().optional(),
   createdAt: timestampSchema,
-});
+}).transform((value): Notification => ({
+  id: value.id,
+  userId: value.userId,
+  title: value.title,
+  message: value.message,
+  type: value.type,
+  link: value.link ?? value.targetUrl ?? null,
+  read: value.read ?? value.isRead ?? false,
+  createdAt: value.createdAt,
+}));
 
 function failure<T>(error: unknown): NotificationServiceResult<T> {
   return {
@@ -92,8 +102,8 @@ function notificationData(input: CreateNotificationInput) {
     title: input.title,
     message: input.message,
     type: input.type,
-    ...(input.targetUrl ? { targetUrl: input.targetUrl } : {}),
-    isRead: false,
+    link: input.link ?? null,
+    read: false,
     createdAt: serverTimestamp(),
   };
 }
@@ -140,6 +150,7 @@ export async function notifyAllAdmins(
 export function subscribeToNotifications(
   userId: string,
   listener: (result: NotificationServiceResult<Notification[]>) => void,
+  maximum = 20,
 ): Unsubscribe {
   if (!userId || auth.currentUser?.uid !== userId) {
     console.warn("[notifications] Subscription skipped", {
@@ -152,7 +163,12 @@ export function subscribeToNotifications(
   }
 
   return onSnapshot(
-    query(collection(db, "notifications"), where("userId", "==", userId)),
+    query(
+      collection(db, "notifications"),
+      where("userId", "==", userId),
+      orderBy("createdAt", "desc"),
+      limit(maximum),
+    ),
     (snapshots) => {
       const notifications: Notification[] = [];
       for (const snapshot of snapshots.docs) {
@@ -175,10 +191,7 @@ export function subscribeToNotifications(
         notifications.push(parsed.data);
       }
 
-      notifications.sort((first, second) =>
-        second.createdAt.localeCompare(first.createdAt),
-      );
-      listener({ success: true, data: notifications.slice(0, 20) });
+      listener({ success: true, data: notifications });
     },
     (error: unknown) => {
       console.error("[notifications] Firestore subscription failed", {
@@ -208,7 +221,7 @@ export async function markNotificationAsRead(
     if (!snapshot.exists() || snapshot.data().userId !== userId) {
       return failure(new Error("Bildirime erişim yetkiniz yok."));
     }
-    await setDoc(reference, { isRead: true }, { merge: true });
+    await setDoc(reference, { read: true }, { merge: true });
     return { success: true, data: undefined };
   } catch (error: unknown) {
     return failure(error);
@@ -227,12 +240,12 @@ export async function markAllNotificationsAsRead(
       query(
         collection(db, "notifications"),
         where("userId", "==", userId),
-        where("isRead", "==", false),
+        where("read", "==", false),
       ),
     );
     const batch = writeBatch(db);
     for (const snapshot of snapshots.docs) {
-      batch.set(snapshot.ref, { isRead: true }, { merge: true });
+      batch.set(snapshot.ref, { read: true }, { merge: true });
     }
     await batch.commit();
     return { success: true, data: undefined };

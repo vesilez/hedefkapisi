@@ -7,11 +7,12 @@ import {
 } from "@/services/notification-service";
 import type { Notification } from "@/types/notification";
 import { Bell, CheckCheck, LoaderCircle } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 function getNotificationTarget(notification: Notification): string {
-  if (notification.targetUrl) return notification.targetUrl;
+  if (notification.link) return notification.link;
 
   switch (notification.type) {
     case "new_support_request":
@@ -28,7 +29,20 @@ function getNotificationTarget(notification: Notification): string {
     case "idea_liked":
       return "/fikirlerim";
     case "chat_message":
+    case "new_message":
       return "/mesajlar";
+    case "meeting_created":
+    case "meeting_updated":
+    case "meeting_cancelled":
+    case "meeting_reminder":
+      return "/takvim";
+    case "support_request":
+      return "/admin/destek-basvurulari";
+    case "support_approved":
+    case "support_rejected":
+      return "/profil?sekme=destekler";
+    case "mentor_request":
+      return "/mentorluk";
     case "admin_activity":
       return "/admin/sponsorlar";
     case "sponsor_approved":
@@ -64,7 +78,7 @@ export function NotificationBell({ userId }: { userId: string }) {
   }, [userId]);
 
   const unreadCount = notifications.filter(
-    (notification) => !notification.isRead,
+    (notification) => !notification.read,
   ).length;
 
   async function markOne(notificationId: string) {
@@ -86,7 +100,7 @@ export function NotificationBell({ userId }: { userId: string }) {
   async function openNotification(notification: Notification) {
     if (busyId) return;
 
-    if (!notification.isRead) {
+    if (!notification.read) {
       setBusyId(notification.id);
       const result = await markNotificationAsRead(notification.id);
       if (!result.success) setError(result.error.message);
@@ -101,9 +115,6 @@ export function NotificationBell({ userId }: { userId: string }) {
     <details
       ref={detailsRef}
       className="relative"
-      onToggle={(event) => {
-        if (event.currentTarget.open) void markAll();
-      }}
       onKeyDown={(event) => {
         if (event.key === "Escape" && detailsRef.current) {
           detailsRef.current.open = false;
@@ -178,7 +189,7 @@ export function NotificationBell({ userId }: { userId: string }) {
                   }
                 }}
                 className={`cursor-pointer border-b border-slate-100 p-4 transition-colors last:border-0 ${
-                  notification.isRead
+                  notification.read
                     ? "bg-white hover:bg-slate-50"
                     : "bg-blue-50 hover:bg-blue-100"
                 }`}
@@ -186,9 +197,9 @@ export function NotificationBell({ userId }: { userId: string }) {
                 <div className="flex gap-3">
                   <span
                     className={`mt-1.5 size-2 shrink-0 rounded-full ${
-                      notification.isRead ? "bg-slate-300" : "bg-blue-600"
+                      notification.read ? "bg-slate-300" : "bg-blue-600"
                     }`}
-                    aria-label={notification.isRead ? "Okundu" : "Okunmadı"}
+                    aria-label={notification.read ? "Okundu" : "Okunmadı"}
                   />
                   <div className="min-w-0 flex-1">
                     <h3 className="text-sm font-semibold text-slate-950">
@@ -204,7 +215,7 @@ export function NotificationBell({ userId }: { userId: string }) {
                           timeStyle: "short",
                         }).format(new Date(notification.createdAt))}
                       </time>
-                      {!notification.isRead && (
+                      {!notification.read && (
                         <button
                           type="button"
                           disabled={busyId === notification.id}
@@ -227,6 +238,9 @@ export function NotificationBell({ userId }: { userId: string }) {
             ))
           )}
         </div>
+        <Link href="/bildirimler" onClick={() => { if (detailsRef.current) detailsRef.current.open = false; }} className="block border-t border-slate-200 px-4 py-3 text-center text-sm font-semibold text-blue-700 hover:bg-blue-50">
+          Tüm bildirimleri gör
+        </Link>
       </div>
     </details>
   );

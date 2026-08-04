@@ -322,7 +322,7 @@ export async function createIdea(
       title: "Yeni hayal oluşturuldu",
       message: `"${validation.data.title}" başlıklı yeni bir hayal oluşturuldu.`,
       type: "new_idea",
-      targetUrl: "/admin/hayaller",
+      link: "/admin/hayaller",
     });
     if (!notification.success) {
       logNotificationError("createIdea", notification.error.message);
@@ -774,7 +774,7 @@ async function moderateIdea(
             ? `"${moderatedIdea.title}" başlıklı hayalin onaylandı.`
             : `"${moderatedIdea.title}" başlıklı hayalin reddedildi.`,
         type: nextStatus === "approved" ? "idea_approved" : "idea_rejected",
-        targetUrl:
+        link:
           nextStatus === "approved" && moderatedIdea.slug
             ? `/hayaller/${moderatedIdea.slug}`
             : "/fikirlerim",

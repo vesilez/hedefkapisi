@@ -335,7 +335,7 @@ export async function createSupportRequest(
         title: "Yeni destek başvurusu",
         message: `"${typeof ideaTitle === "string" ? ideaTitle : "Hayalin"}" için yeni bir destek başvurusu geldi.`,
         type: "support_request_received",
-        targetUrl: ideaTarget,
+        link: ideaTarget,
       });
       if (!ownerNotification.success) {
         logNotificationError(
@@ -350,7 +350,7 @@ export async function createSupportRequest(
       title: "Yeni destek başvurusu",
       message: `"${typeof ideaTitle === "string" ? ideaTitle : "Bir hayal"}" için yeni bir destek başvurusu geldi.`,
       type: "new_support_request",
-      targetUrl: "/admin/destek-basvurulari",
+      link: "/admin/destek-basvurulari",
     });
     if (!adminNotification.success) {
       logNotificationError(
@@ -701,7 +701,7 @@ async function reviewSupportRequest(
       const reviewedIdeaSlug: unknown = ideaSnapshot?.data()?.slug;
       const ideaOwnerId: unknown = ideaSnapshot?.data()?.studentId;
       const isSponsorship = reviewedData?.applicationType === "sponsorship";
-      const targetUrl =
+      const link =
         status === "approved" && reviewedSupportRequest.chatId
           ? (`/mesajlar?sohbet=${reviewedSupportRequest.chatId}` as const)
           : typeof reviewedIdeaSlug === "string" && reviewedIdeaSlug
@@ -724,9 +724,9 @@ async function reviewSupportRequest(
             : "Destek başvurun yönetici tarafından reddedildi.",
         type:
           status === "approved"
-            ? "support_request_approved"
-            : "support_request_rejected",
-        targetUrl,
+            ? "support_approved"
+            : "support_rejected",
+        link,
       });
       if (!notification.success) {
         logNotificationError(
@@ -751,7 +751,7 @@ async function reviewSupportRequest(
             status === "approved"
               ? "sponsorship_offer_approved"
               : "sponsorship_offer_rejected",
-          targetUrl:
+          link:
             typeof reviewedIdeaSlug === "string" && reviewedIdeaSlug
               ? `/hayaller/${reviewedIdeaSlug}`
               : "/fikirlerim",
