@@ -7,3 +7,8 @@ export interface IdeaMatch {
   score: number;
   reasons: string[];
 }
+
+export interface MatchingAnalytics {
+  byRole: Array<{ role: MatchRole; recommendationCount: number; averageScore: number }>;
+  topCategories: Array<{ categoryId: string; count: number }>;
+}

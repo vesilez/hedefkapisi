@@ -40,6 +40,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type ComponentType } from "react";
+import { MatchingAnalytics } from "./matching-analytics";
 
 const AdminAnalyticsSection = dynamic(
   () =>
@@ -313,6 +314,8 @@ export function AdminOverview() {
       </div>
 
       <AdminAnalyticsSection adminId={user.id} />
+
+      <MatchingAnalytics adminId={user.id} />
 
       <RecentActivitiesSection
         state={activityState}

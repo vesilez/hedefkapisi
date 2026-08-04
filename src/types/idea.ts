@@ -68,6 +68,7 @@ export interface IdeaListItem {
   slug: string;
   title: string;
   shortDescription: string;
+  tags?: string[];
   categoryId: EntityId;
   city: Nullable<string>;
   stage: IdeaStage;
