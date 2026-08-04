@@ -20,6 +20,10 @@ const FIREBASE_ERROR_MESSAGES: Readonly<Record<FirebaseErrorCode, string>> = {
   unavailable: "Hizmete şu anda ulaşılamıyor. Lütfen tekrar deneyin.",
   "firestore/unavailable":
     "Hizmete şu anda ulaşılamıyor. Lütfen tekrar deneyin.",
+  "failed-precondition":
+    "Firestore sorgusu için gerekli yapılandırma veya indeks eksik.",
+  "firestore/failed-precondition":
+    "Firestore sorgusu için gerekli yapılandırma veya indeks eksik.",
   "storage/unauthorized": "Bu dosyaya erişmek için yetkiniz yok.",
   "storage/object-not-found": "İstenen dosya bulunamadı.",
   "storage/quota-exceeded":

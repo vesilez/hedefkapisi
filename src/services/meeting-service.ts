@@ -3,6 +3,7 @@ import "client-only";
 import { auth } from "@/lib/firebase/auth";
 import { db } from "@/lib/firebase/firestore";
 import { meetingSchema } from "@/lib/validations/meeting-schema";
+import { createJitsiMeetingLink, createSecureMeetingRoomId } from "@/lib/meetings/jitsi";
 import { createNotification } from "@/services/notification-service";
 import type { Meeting, MeetingStatus } from "@/types/meeting";
 import {
@@ -38,6 +39,7 @@ function toIso(value: unknown): string {
 
 function mapMeeting(snapshot: QueryDocumentSnapshot<DocumentData> | { id: string; data(): DocumentData }): Meeting {
   const data = snapshot.data();
+  const meetingType = data.meetingType === "phone" || data.meetingType === "face_to_face" ? data.meetingType : "online";
   return {
     id: snapshot.id,
     conversationId: data.conversationId,
@@ -49,6 +51,10 @@ function mapMeeting(snapshot: QueryDocumentSnapshot<DocumentData> | { id: string
     startAt: toIso(data.startAt),
     endAt: toIso(data.endAt),
     location: data.location ?? null,
+    meetingType,
+    meetingProvider: data.meetingProvider === "jitsi" ? "jitsi" : null,
+    meetingRoomId: data.meetingRoomId ?? null,
+    meetingLink: data.meetingLink ?? null,
     meetingUrl: data.meetingUrl ?? null,
     status: data.status,
     createdAt: toIso(data.createdAt),
@@ -74,6 +80,7 @@ export async function createMeeting(input: unknown): Promise<Result<string>> {
       return { success: false, error: { message: "Bu görüşme için toplantı planlama yetkiniz yok." } };
     }
     const reference = doc(collection(db, "meetings"));
+    const meetingRoomId = parsed.data.meetingType === "online" ? createSecureMeetingRoomId() : null;
     const payload = {
       conversationId: parsed.data.conversationId,
       ideaId: conversationData.ideaId,
@@ -84,7 +91,11 @@ export async function createMeeting(input: unknown): Promise<Result<string>> {
       startAt: istanbulLocalToDate(parsed.data.startAt),
       endAt: istanbulLocalToDate(parsed.data.endAt),
       location: parsed.data.location || null,
-      meetingUrl: parsed.data.meetingUrl || null,
+      meetingType: parsed.data.meetingType,
+      meetingProvider: meetingRoomId ? "jitsi" : null,
+      meetingRoomId,
+      meetingLink: meetingRoomId ? createJitsiMeetingLink(meetingRoomId) : null,
+      meetingUrl: null,
       status: "pending",
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -146,7 +157,12 @@ export async function getMeeting(id: string): Promise<Result<Meeting>> {
   try {
     const snapshot = await getDoc(doc(db, "meetings", id));
     if (!snapshot.exists()) return { success: false, error: { message: "Toplantı bulunamadı." } };
-    return { success: true, data: mapMeeting(snapshot) };
+    let meeting = mapMeeting(snapshot);
+    if (meeting.meetingType === "online" && !meeting.meetingLink && auth.currentUser?.uid === meeting.organizerId) {
+      const backfill = await backfillJitsiMeeting(id);
+      if (backfill.success) meeting = backfill.data;
+    }
+    return { success: true, data: meeting };
   } catch (error) {
     return failure(error, "getMeeting");
   }
@@ -154,9 +170,46 @@ export async function getMeeting(id: string): Promise<Result<Meeting>> {
 
 export async function updateMeetingStatus(id: string, status: MeetingStatus): Promise<Result<null>> {
   try {
+    const snapshot = await getDoc(doc(db, "meetings", id));
+    if (!snapshot.exists()) return { success: false, error: { message: "Toplantı bulunamadı." } };
     await updateDoc(doc(db, "meetings", id), { status, updatedAt: serverTimestamp() });
+    if (status === "accepted") {
+      const meeting = mapMeeting(snapshot);
+      const actorId = auth.currentUser?.uid;
+      if (actorId) await Promise.all(
+        meeting.participantIds.filter((participantId) => participantId !== actorId).map((participantId) =>
+          createNotification({
+            userId: participantId,
+            sourceId: id,
+            title: "Toplantı kabul edildi",
+            message: `“${meeting.title}” görüşmesi kabul edildi.`,
+            type: "meeting_updated",
+            link: `/takvim/${id}`,
+          }),
+        ),
+      );
+    }
     return { success: true, data: null };
   } catch (error) {
     return failure(error, "updateMeetingStatus");
+  }
+}
+
+export async function backfillJitsiMeeting(id: string, allowAdmin = false): Promise<Result<Meeting>> {
+  const userId = auth.currentUser?.uid;
+  if (!userId) return { success: false, error: { message: "Oturum gerekli." } };
+  try {
+    const reference = doc(db, "meetings", id);
+    const snapshot = await getDoc(reference);
+    if (!snapshot.exists()) return { success: false, error: { message: "Toplantı bulunamadı." } };
+    const meeting = mapMeeting(snapshot);
+    if (meeting.meetingType !== "online" || meeting.meetingLink) return { success: true, data: meeting };
+    if (!allowAdmin && meeting.organizerId !== userId) return { success: false, error: { message: "Bağlantıyı yalnızca organizatör hazırlayabilir." } };
+    const meetingRoomId = createSecureMeetingRoomId();
+    const meetingLink = createJitsiMeetingLink(meetingRoomId);
+    await setDoc(reference, { meetingType: "online", meetingProvider: "jitsi", meetingRoomId, meetingLink, updatedAt: serverTimestamp() }, { merge: true });
+    return { success: true, data: { ...meeting, meetingProvider: "jitsi", meetingRoomId, meetingLink } };
+  } catch (error) {
+    return failure(error, "backfillJitsiMeeting");
   }
 }

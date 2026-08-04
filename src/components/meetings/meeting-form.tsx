@@ -56,7 +56,7 @@ export function MeetingForm({ conversationId, onClose }: { conversationId: strin
       startAt: form.get("startAt"),
       endAt: form.get("endAt"),
       location: form.get("location"),
-      meetingUrl: form.get("meetingUrl"),
+      meetingType: form.get("meetingType"),
     };
     const validation = meetingSchema.safeParse(values);
     if (!validation.success) {
@@ -87,8 +87,8 @@ export function MeetingForm({ conversationId, onClose }: { conversationId: strin
         <label className="block text-sm font-semibold text-slate-700">Başlangıç<Input name="startAt" type="datetime-local" required step={60} defaultValue={defaults.startAt} className="mt-1" /></label>
         <label className="block text-sm font-semibold text-slate-700">Bitiş<Input name="endAt" type="datetime-local" required step={60} defaultValue={defaults.endAt} className="mt-1" /></label>
       </div>
-      <label className="block text-sm font-semibold text-slate-700">Konum<Input name="location" maxLength={200} className="mt-1" placeholder="Çevrim içi veya adres" /></label>
-      <label className="block text-sm font-semibold text-slate-700">Toplantı bağlantısı<Input name="meetingUrl" type="url" className="mt-1" placeholder="https://..." /></label>
+      <label className="block text-sm font-semibold text-slate-700">Toplantı türü<select name="meetingType" defaultValue="online" className="mt-1 min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm"><option value="online">Çevrim içi (Jitsi Meet)</option><option value="phone">Telefon</option><option value="face_to_face">Yüz yüze</option></select></label>
+      <label className="block text-sm font-semibold text-slate-700">Konum / telefon bilgisi<Input name="location" maxLength={200} className="mt-1" placeholder="Online toplantılarda isteğe bağlı" /></label>
       <label className="block text-sm font-semibold text-slate-700">Açıklama<Textarea name="description" maxLength={1000} rows={4} className="mt-1" /></label>
       {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-800">{error}</p>}
       <Button type="submit" disabled={sending}>{sending ? <LoaderCircle className="size-4 animate-spin" /> : <CalendarPlus className="size-4" />}Toplantıyı Kaydet</Button>

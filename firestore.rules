@@ -853,6 +853,10 @@ service cloud.firestore {
             && get(/databases/$(database)/documents/meetings/$(sourceId)).data.organizerId == actorId
             && recipientId in get(/databases/$(database)/documents/meetings/$(sourceId)).data.participantIds
             && actorId != recipientId)
+          || (type in ["meeting_updated", "meeting_cancelled"]
+            && actorId in get(/databases/$(database)/documents/meetings/$(sourceId)).data.participantIds
+            && recipientId in get(/databases/$(database)/documents/meetings/$(sourceId)).data.participantIds
+            && actorId != recipientId)
           || (type == "new_idea"
             && get(/databases/$(database)/documents/ideas/$(sourceId)).data.studentId == actorId
             && get(/databases/$(database)/documents/users/$(recipientId)).data.role in ["admin", "superadmin"])
@@ -1144,7 +1148,8 @@ service cloud.firestore {
         && !isAdmin()
         && request.resource.data.keys().hasOnly([
           "conversationId", "ideaId", "title", "description", "participantIds",
-          "organizerId", "startAt", "endAt", "location", "meetingUrl", "status",
+          "organizerId", "startAt", "endAt", "location", "meetingType",
+          "meetingProvider", "meetingRoomId", "meetingLink", "meetingUrl", "status",
           "createdAt", "updatedAt"
         ])
         && exists(/databases/$(database)/documents/conversations/$(request.resource.data.conversationId))
@@ -1164,15 +1169,44 @@ service cloud.firestore {
         && request.resource.data.endAt is timestamp
         && request.resource.data.endAt > request.resource.data.startAt
         && (request.resource.data.location == null || request.resource.data.location is string)
-        && (request.resource.data.meetingUrl == null || request.resource.data.meetingUrl is string)
+        && request.resource.data.meetingType in ["online", "phone", "face_to_face"]
+        && request.resource.data.meetingUrl == null
+        && (
+          (request.resource.data.meetingType == "online"
+            && request.resource.data.meetingProvider == "jitsi"
+            && request.resource.data.meetingRoomId is string
+            && request.resource.data.meetingRoomId.size() >= 40
+            && request.resource.data.meetingLink == "https://meet.jit.si/" + request.resource.data.meetingRoomId)
+          || (request.resource.data.meetingType != "online"
+            && request.resource.data.meetingProvider == null
+            && request.resource.data.meetingRoomId == null
+            && request.resource.data.meetingLink == null)
+        )
         && request.resource.data.status == "pending"
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time;
       allow update: if signedIn()
         && (request.auth.uid in resource.data.participantIds || isAdmin())
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status", "updatedAt"])
-        && resource.data.status in ["pending", "scheduled"]
-        && request.resource.data.status in ["completed", "cancelled"]
+        && (
+          (resource.data.status in ["pending", "scheduled"]
+            && request.resource.data.status in ["accepted", "rejected", "cancelled"])
+          || (resource.data.status == "accepted"
+            && request.resource.data.status in ["completed", "cancelled"])
+        )
+        && request.resource.data.updatedAt == request.time;
+      allow update: if signedIn()
+        && (request.auth.uid == resource.data.organizerId || isAdmin())
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "meetingType", "meetingProvider", "meetingRoomId", "meetingLink", "updatedAt"
+        ])
+        && !("meetingLink" in resource.data)
+        && (!("meetingType" in resource.data) || resource.data.meetingType == "online")
+        && request.resource.data.meetingType == "online"
+        && request.resource.data.meetingProvider == "jitsi"
+        && request.resource.data.meetingRoomId is string
+        && request.resource.data.meetingRoomId.size() >= 40
+        && request.resource.data.meetingLink == "https://meet.jit.si/" + request.resource.data.meetingRoomId
         && request.resource.data.updatedAt == request.time;
       allow delete: if false;
     }

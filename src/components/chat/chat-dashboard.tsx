@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Textarea } from "@/components/ui/textarea";
+import { ChatMeetingCard } from "@/components/meetings";
 import { isAdminRole, type UserRole } from "@/constants/roles";
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -428,6 +429,7 @@ export function ChatDashboard() {
               </header>
 
               <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50 p-4 sm:p-5">
+                <ChatMeetingCard conversationId={selectedChat.id} userId={user.id} />
                 {messagesLoading ? (
                   <LoadingSpinner label="Mesajlar yükleniyor..." />
                 ) : messages.length === 0 ? (

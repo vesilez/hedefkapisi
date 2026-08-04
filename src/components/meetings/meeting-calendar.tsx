@@ -11,7 +11,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { MeetingForm } from "./meeting-form";
 
-const statusLabel = { pending: "Planlandı", completed: "Tamamlandı", cancelled: "İptal edildi" } as const;
+const statusLabel = { pending: "Onay bekliyor", accepted: "Kabul edildi", rejected: "Reddedildi", completed: "Tamamlandı", cancelled: "İptal edildi" } as const;
 
 export function MeetingCalendar({ conversationId }: { conversationId?: string }) {
   const { user } = useAuth();
@@ -44,7 +44,7 @@ export function MeetingCalendar({ conversationId }: { conversationId?: string })
                 <div className="flex justify-between gap-3"><h2 className="font-bold text-slate-950">{meeting.title}</h2><span className="text-xs font-bold text-blue-700">{statusLabel[meeting.status]}</span></div>
                 <p className="mt-4 flex items-center gap-2 text-sm text-slate-600"><Clock className="size-4" />{new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(meeting.startAt))}</p>
                 {meeting.location && <p className="mt-2 flex items-center gap-2 text-sm text-slate-600"><MapPin className="size-4" />{meeting.location}</p>}
-                {meeting.meetingUrl && <p className="mt-2 flex items-center gap-2 text-sm text-blue-700"><Video className="size-4" />Çevrim içi toplantı</p>}
+                {meeting.meetingType === "online" && <p className="mt-2 flex items-center gap-2 text-sm text-blue-700"><Video className="size-4" />Jitsi Meet görüşmesi</p>}
               </Card>
             </Link>
           ))}

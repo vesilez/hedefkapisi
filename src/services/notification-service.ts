@@ -87,9 +87,14 @@ function failure<T>(error: unknown): NotificationServiceResult<T> {
   };
 }
 
-function isPermissionDenied(error: unknown): boolean {
-  const code = getFirebaseErrorCode(error);
-  return code === "permission-denied" || code === "firestore/permission-denied";
+function logFirebaseError(operation: string, error: unknown): void {
+  console.error(`[notification-service] ${operation} FirebaseError`, {
+    code: getFirebaseErrorCode(error) ?? "firestore/unknown",
+    name: error instanceof Error ? error.name : undefined,
+    message: error instanceof Error ? error.message : String(error),
+    stack: error instanceof Error ? error.stack : undefined,
+    error,
+  });
 }
 
 function notificationData(input: CreateNotificationInput) {
@@ -116,6 +121,7 @@ export async function createNotification(
     await setDoc(reference, { id: reference.id, ...notificationData(input) });
     return { success: true, data: undefined };
   } catch (error: unknown) {
+    logFirebaseError("createNotification", error);
     return failure(error);
   }
 }
@@ -143,6 +149,7 @@ export async function notifyAllAdmins(
     await batch.commit();
     return { success: true, data: undefined };
   } catch (error: unknown) {
+    logFirebaseError("notifyAllAdmins", error);
     return failure(error);
   }
 }
@@ -194,16 +201,7 @@ export function subscribeToNotifications(
       listener({ success: true, data: notifications });
     },
     (error: unknown) => {
-      console.error("[notifications] Firestore subscription failed", {
-        collection: "notifications",
-        userId,
-        code: getFirebaseErrorCode(error) ?? "firestore/unknown",
-        error,
-      });
-      if (isPermissionDenied(error)) {
-        listener({ success: true, data: [] });
-        return;
-      }
+      logFirebaseError("subscribeToNotifications", error);
       listener(failure(error));
     },
   );
@@ -224,6 +222,7 @@ export async function markNotificationAsRead(
     await setDoc(reference, { read: true }, { merge: true });
     return { success: true, data: undefined };
   } catch (error: unknown) {
+    logFirebaseError("markNotificationAsRead", error);
     return failure(error);
   }
 }
@@ -237,19 +236,19 @@ export async function markAllNotificationsAsRead(
 
   try {
     const snapshots = await getDocs(
-      query(
-        collection(db, "notifications"),
-        where("userId", "==", userId),
-        where("read", "==", false),
-      ),
+      query(collection(db, "notifications"), where("userId", "==", userId)),
     );
     const batch = writeBatch(db);
     for (const snapshot of snapshots.docs) {
+      const data = snapshot.data();
+      const isRead = data.read === true || data.isRead === true;
+      if (isRead) continue;
       batch.set(snapshot.ref, { read: true }, { merge: true });
     }
     await batch.commit();
     return { success: true, data: undefined };
   } catch (error: unknown) {
+    logFirebaseError("markAllNotificationsAsRead", error);
     return failure(error);
   }
 }
