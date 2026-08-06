@@ -85,6 +85,7 @@ const requestSchema = z.object({
   id: z.string().min(1),
   ideaId: z.string().min(1),
   supporterId: z.string().min(1),
+  sponsorId: z.string().nullable().default(null),
   supportTypes: z.array(z.enum(SUPPORT_TYPES)),
   applicationType: z.enum(SUPPORT_APPLICATION_TYPES).default("support"),
   applicantRole: z
@@ -281,6 +282,7 @@ export async function createSupportRequest(
       id: reference.id,
       ideaId: validation.data.ideaId,
       supporterId,
+      sponsorId: applicationType === "sponsorship" ? supporterId : null,
       supportTypes: validation.data.supportTypes,
       applicationType,
       applicantRole: role,
@@ -305,16 +307,24 @@ export async function createSupportRequest(
         : null,
     });
     await runTransaction(db, async (transaction) => {
-      const [transactionProfile, transactionIdea] = await Promise.all([
-        transaction.get(doc(db, "users", supporterId)),
-        transaction.get(doc(db, "ideas", validation.data.ideaId)),
-      ]);
+      const [transactionProfile, transactionIdea, existingRequest] =
+        await Promise.all([
+          transaction.get(doc(db, "users", supporterId)),
+          transaction.get(doc(db, "ideas", validation.data.ideaId)),
+          transaction.get(reference),
+        ]);
       if (
         !transactionProfile.exists() ||
         !transactionIdea.exists() ||
         transactionIdea.data().status !== "approved"
       ) {
         throw new Error("support-request/not-available");
+      }
+      if (
+        existingRequest.exists() &&
+        ["pending", "approved"].includes(existingRequest.data().status)
+      ) {
+        throw new Error("support-request/duplicate");
       }
       transaction.set(reference, requestPayload);
       // Sponsorship offers are approval applications, not completed support.
@@ -342,8 +352,11 @@ export async function createSupportRequest(
       const ownerNotification = await createNotification({
         userId: ideaOwnerId,
         sourceId: reference.id,
-        title: "Yeni destek başvurusu",
-        message: `"${typeof ideaTitle === "string" ? ideaTitle : "Hayalin"}" için yeni bir destek başvurusu geldi.`,
+        title:
+          applicationType === "sponsorship"
+            ? "Yeni sponsorluk teklifi"
+            : "Yeni destek başvurusu",
+        message: `"${typeof ideaTitle === "string" ? ideaTitle : "Hayalin"}" için yeni bir ${applicationType === "sponsorship" ? "sponsorluk teklifi" : "destek başvurusu"} geldi.`,
         type: "support_request_received",
         link: ideaTarget,
       });
@@ -601,8 +614,7 @@ async function reviewSupportRequest(
             : "";
         let chatId = "";
 
-        const isSponsorship =
-          snapshot.data().applicationType === "sponsorship";
+        const isSponsorship = snapshot.data().applicationType === "sponsorship";
         if (status === "approved") {
           if (!supporterId || !ideaId) {
             throw new Error("support-request/invalid-participants");
@@ -636,7 +648,9 @@ async function reviewSupportRequest(
               id: conversationId,
               supportRequestId: requestId,
               mentorshipId: null,
-              type: isSponsorship ? "sponsorship" : snapshot.data().applicationType,
+              type: isSponsorship
+                ? "sponsorship"
+                : snapshot.data().applicationType,
               ideaId,
               ideaTitle,
               ownerId,
@@ -732,10 +746,7 @@ async function reviewSupportRequest(
           status === "approved"
             ? "Destek başvurun yönetici tarafından onaylandı."
             : "Destek başvurun yönetici tarafından reddedildi.",
-        type:
-          status === "approved"
-            ? "support_approved"
-            : "support_rejected",
+        type: status === "approved" ? "support_approved" : "support_rejected",
         link,
       });
       if (!notification.success) {

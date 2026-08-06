@@ -6,8 +6,10 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Textarea } from "@/components/ui/textarea";
-import { IdeaRecommendations } from "@/components/recommendations/idea-recommendations";
+import { SponsorOfferModal } from "@/components/sponsor/sponsor-offer-modal";
 import { SUPPORT_REQUEST_STATUS_LABELS } from "@/constants/support-request-statuses";
+import { SUPPORT_TYPE_LABELS } from "@/constants/support-types";
+import { DEFAULT_CATEGORIES } from "@/constants/default-categories";
 import { useAuth } from "@/hooks/use-auth";
 import {
   getSponsorDashboard,
@@ -17,13 +19,8 @@ import type {
   SponsorDashboardData,
   SponsorOfferListItem,
 } from "@/types/sponsor";
-import {
-  Building2,
-  CheckCircle2,
-  Clock3,
-  HandCoins,
-  Send,
-} from "lucide-react";
+import type { IdeaListItem } from "@/types/idea";
+import { Building2, CheckCircle2, Clock3, HandCoins, Send } from "lucide-react";
 import Link from "next/link";
 import { db } from "@/lib/firebase/firestore";
 import { doc, onSnapshot } from "firebase/firestore";
@@ -34,6 +31,11 @@ export function SponsorPanel() {
   const [data, setData] = useState<SponsorDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [offerIdea, setOfferIdea] = useState<{
+    id: string;
+    title: string;
+  } | null>(null);
+  const [offerSuccess, setOfferSuccess] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -155,7 +157,23 @@ export function SponsorPanel() {
       </section>
 
       {data.profile.approvalStatus === "approved" && (
-        <IdeaRecommendations role="sponsor" />
+        <>
+          {offerSuccess && (
+            <Card
+              className="border-emerald-200 bg-emerald-50 text-emerald-800"
+              role="status"
+            >
+              {offerSuccess}
+            </Card>
+          )}
+          <SponsorIdeaRecommendations
+            ideas={data.ideas}
+            onSendOffer={(idea) => {
+              setOfferSuccess(null);
+              setOfferIdea(idea);
+            }}
+          />
+        </>
       )}
 
       {data.profile.approvalStatus !== "approved" && (
@@ -188,7 +206,104 @@ export function SponsorPanel() {
         offers={data.offers}
         emptyMessage="Henüz bir sponsorluk teklifi göndermediniz."
       />
+      {offerIdea && (
+        <SponsorOfferModal
+          ideaId={offerIdea.id}
+          ideaTitle={offerIdea.title}
+          onClose={() => setOfferIdea(null)}
+          onSuccess={async (ideaTitle) => {
+            setOfferIdea(null);
+            setOfferSuccess(
+              `“${ideaTitle}” için destek teklifiniz başarıyla gönderildi.`,
+            );
+            await load();
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+function SponsorIdeaRecommendations({
+  ideas,
+  onSendOffer,
+}: {
+  ideas: IdeaListItem[];
+  onSendOffer: (idea: { id: string; title: string }) => void;
+}) {
+  return (
+    <section aria-labelledby="sponsor-recommended-ideas">
+      <h2
+        id="sponsor-recommended-ideas"
+        className="text-2xl font-black text-slate-950"
+      >
+        Sana Önerilen Hayaller
+      </h2>
+      <p className="mt-2 text-sm text-slate-600">
+        Destek alanlarınızla eşleşebilecek onaylı hayalleri inceleyin.
+      </p>
+      {ideas.length === 0 ? (
+        <Card className="mt-4 text-slate-600">
+          Şimdilik önerilebilecek bir hayal bulunamadı.
+        </Card>
+      ) : (
+        <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {ideas.map((idea) => (
+            <Card key={idea.id} className="flex h-full flex-col">
+              <h3 className="text-lg font-bold text-slate-950">{idea.title}</h3>
+              <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+                <div>
+                  <dt className="font-semibold text-slate-500">Kategori</dt>
+                  <dd className="text-slate-800">
+                    {DEFAULT_CATEGORIES.find(
+                      (category) => category.id === idea.categoryId,
+                    )?.label ?? idea.categoryId}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="font-semibold text-slate-500">Şehir</dt>
+                  <dd className="text-slate-800">
+                    {idea.city ?? "Belirtilmedi"}
+                  </dd>
+                </div>
+                <div className="sm:col-span-2">
+                  <dt className="font-semibold text-slate-500">
+                    İhtiyaç duyulan destekler
+                  </dt>
+                  <dd className="mt-2 flex flex-wrap gap-1">
+                    {idea.supportNeeds.map((supportType) => (
+                      <Badge key={supportType}>
+                        {SUPPORT_TYPE_LABELS[supportType]}
+                      </Badge>
+                    ))}
+                  </dd>
+                </div>
+              </dl>
+              <p className="mt-4 line-clamp-3 text-sm leading-6 text-slate-600">
+                {idea.shortDescription}
+              </p>
+              <div className="mt-auto flex flex-col gap-3 pt-5 sm:flex-row sm:items-center">
+                <Link
+                  href={`/hayaller/${idea.slug}`}
+                  className="font-semibold text-blue-700 hover:text-blue-900"
+                >
+                  Detayları Gör →
+                </Link>
+                <Button
+                  className="sm:ml-auto"
+                  type="button"
+                  onClick={() =>
+                    onSendOffer({ id: idea.id, title: idea.title })
+                  }
+                >
+                  Destek Teklifi Gönder
+                </Button>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 

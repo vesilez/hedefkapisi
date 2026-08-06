@@ -37,7 +37,14 @@ export const createSupportRequestSchema = z
     contributionDetails: safeText().trim().max(1000).nullable(),
     sponsorshipOffer: z
       .object({
-        estimatedBudget: safeText().trim().min(1).max(120),
+        estimatedBudget: safeText()
+          .trim()
+          .min(1, "Tahmini bütçe boş bırakılamaz.")
+          .max(120)
+          .refine(
+            (value) => !/^\s*-/.test(value),
+            "Tahmini bütçe negatif olamaz.",
+          ),
         resources: safeText().trim().min(10).max(1500),
         duration: safeText().trim().min(2).max(200),
       })

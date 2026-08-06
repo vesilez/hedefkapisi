@@ -25,6 +25,7 @@ export interface SponsorshipOfferDetails {
 export interface SupportRequest extends BaseEntity {
   ideaId: EntityId;
   supporterId: EntityId;
+  sponsorId: Nullable<EntityId>;
   supportTypes: SupportType[];
   applicationType: SupportApplicationType;
   applicantRole: Extract<UserRole, "supporter" | "mentor" | "sponsor">;
@@ -52,6 +53,7 @@ export interface SupportRequestListItem {
   id: EntityId;
   ideaId: EntityId;
   supporterId: EntityId;
+  sponsorId: Nullable<EntityId>;
   supportTypes: SupportType[];
   applicationType: SupportApplicationType;
   applicantRole: Extract<UserRole, "supporter" | "mentor" | "sponsor">;

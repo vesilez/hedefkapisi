@@ -656,6 +656,7 @@ service cloud.firestore {
       function validSponsorCreate() {
         return currentUser().data.role == "sponsor"
           && request.resource.data.supporterId == request.auth.uid
+          && request.resource.data.sponsorId == request.auth.uid
           && request.resource.data.applicantRole == "sponsor"
           && request.resource.data.applicationType == "sponsorship"
           && requestId == request.auth.uid + "__" + request.resource.data.ideaId + "__sponsorship"
@@ -665,13 +666,19 @@ service cloud.firestore {
       allow create: if signedIn()
         && currentUser().data.role in ["supporter", "mentor", "sponsor"]
         && request.resource.data.keys().hasOnly([
-          "id", "ideaId", "supporterId", "supportTypes", "applicationType",
+          "id", "ideaId", "supporterId", "sponsorId", "supportTypes", "applicationType",
           "applicantRole", "message", "contactPreference",
           "contributionDetails", "sponsorshipOffer", "status", "adminNote",
           "createdAt", "updatedAt"
         ])
         && request.resource.data.id == requestId
         && request.resource.data.supporterId == request.auth.uid
+        && (
+          (request.resource.data.applicationType == "sponsorship"
+            && request.resource.data.sponsorId == request.auth.uid)
+          || (request.resource.data.applicationType != "sponsorship"
+            && request.resource.data.sponsorId == null)
+        )
         && request.resource.data.status == "pending"
         && request.resource.data.message is string
         && request.resource.data.message.size() >= 20
@@ -695,6 +702,7 @@ service cloud.firestore {
               "estimatedBudget", "resources", "duration"
             ])
             && safeUserText(request.resource.data.sponsorshipOffer.estimatedBudget, 1, 120)
+            && !request.resource.data.sponsorshipOffer.estimatedBudget.matches("^-.*")
             && safeUserText(request.resource.data.sponsorshipOffer.resources, 10, 1500)
             && safeUserText(request.resource.data.sponsorshipOffer.duration, 2, 200)
           )
