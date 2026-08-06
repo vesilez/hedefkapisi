@@ -1,5 +1,5 @@
 "use client";
-
+import Image from "next/image";
 import { useAuth } from "@/hooks/use-auth";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -78,9 +78,15 @@ export function SiteHeader() {
           href="/"
           className="group flex min-w-0 shrink items-center gap-2.5 rounded-xl focus-visible:outline-blue-700"
         >
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-blue-700 text-white shadow-md shadow-blue-700/20 group-hover:bg-blue-800">
-            <Target aria-hidden="true" className="size-5" />
-          </span>
+          
+          <Image
+  src="/hedef-kapisi-logo.jpeg"
+  alt="Hedef Kapısı"
+  width={40}
+  height={40}
+  priority
+  className="h-10 w-10 rounded-full object-cover"
+/>
           <span className="truncate text-base font-extrabold tracking-tight text-blue-900 sm:text-lg">
             {siteConfig.name}
           </span>

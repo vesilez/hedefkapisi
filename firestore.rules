@@ -663,6 +663,11 @@ service cloud.firestore {
           && get(/databases/$(database)/documents/sponsorProfiles/$(request.auth.uid)).data.approvalStatus == "approved";
       }
 
+      function ownSponsorRequestId() {
+        return roleIs("sponsor")
+          && requestId.matches("^" + request.auth.uid + "__[^/]+__sponsorship$");
+      }
+
       allow create: if signedIn()
         && currentUser().data.role in ["supporter", "mentor", "sponsor"]
         && request.resource.data.keys().hasOnly([
@@ -729,7 +734,19 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/ideas/$(request.resource.data.ideaId)).data.status == "approved"
         && get(/databases/$(database)/documents/ideas/$(request.resource.data.ideaId)).data.studentId != request.auth.uid;
 
-      allow read: if signedIn() && (
+      // createSupportRequest checks the deterministic target document inside a
+      // transaction before creating it. Permit a sponsor to get only their own
+      // sponsorship request path even when that document does not exist yet.
+      allow get: if signedIn() && (
+        ownSponsorRequestId()
+        || resource.data.supporterId == request.auth.uid
+        || idea().data.studentId == request.auth.uid
+        || isAdmin()
+      );
+
+      // Keep collection queries constrained by document data so this exception
+      // cannot broaden list access for sponsors or other participant roles.
+      allow list: if signedIn() && (
         resource.data.supporterId == request.auth.uid
         || idea().data.studentId == request.auth.uid
         || isAdmin()
