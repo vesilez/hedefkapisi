@@ -45,7 +45,11 @@ import {
 import { z } from "zod";
 
 export type SupportRequestServiceResult<T> =
-  { success: true; data: T } | { success: false; error: { message: string } };
+  | { success: true; data: T }
+  | {
+      success: false;
+      error: { message: string; code?: string; firebaseMessage?: string };
+    };
 
 export interface AdminSupportRequestListItem {
   request: SupportRequest;
@@ -106,16 +110,22 @@ const requestSchema = z.object({
 });
 
 function failure<T>(error: unknown): SupportRequestServiceResult<T> {
+  const code = getFirebaseErrorCode(error);
+  const firebaseMessage =
+    error instanceof Error ? error.message : getFirebaseErrorMessage(error);
   console.error("[support-request-service] Firestore operation failed", {
     userId: auth.currentUser?.uid ?? null,
-    code: getFirebaseErrorCode(error) ?? "firestore/unknown",
-    message:
-      error instanceof Error ? error.message : getFirebaseErrorMessage(error),
+    code: code ?? "firestore/unknown",
+    message: firebaseMessage,
     error,
   });
   return {
     success: false,
-    error: { message: getFirebaseErrorMessage(error) },
+    error: {
+      message: getFirebaseErrorMessage(error),
+      code,
+      firebaseMessage,
+    },
   };
 }
 

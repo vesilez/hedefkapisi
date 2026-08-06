@@ -265,7 +265,12 @@ async function getSponsorshipOffers(
   sponsorId: string,
 ): Promise<SponsorOfferListItem[]> {
   const result = await getSupportRequestsByUser(sponsorId);
-  if (!result.success) throw new Error(result.error.message);
+  if (!result.success) {
+    throw {
+      code: result.error.code,
+      message: result.error.firebaseMessage ?? result.error.message,
+    };
+  }
   const requests = result.data.filter(
     (request) => request.applicationType === "sponsorship",
   );
@@ -286,6 +291,97 @@ async function getSponsorshipOffers(
   );
 }
 
+type DashboardQueryDetails = {
+  collection: string;
+  fields: readonly string[];
+};
+
+function logDashboardQueryError(
+  operation: string,
+  details: DashboardQueryDetails,
+  error: unknown,
+): void {
+  const message =
+    typeof error === "object" &&
+    error !== null &&
+    "message" in error &&
+    typeof error.message === "string"
+      ? error.message
+      : getFirebaseErrorMessage(error);
+
+  console.error(`[sponsor-dashboard:${operation}] Firestore query failed`, {
+    code: getFirebaseErrorCode(error) ?? "firestore/unknown",
+    message,
+    collection: details.collection,
+    fields: details.fields,
+    error,
+  });
+}
+
+async function loadSponsorIdeas(
+  filters: SponsorIdeaFilters,
+): Promise<IdeaListItem[]> {
+  const details = {
+    collection: "ideas",
+    fields: ["status == approved", "createdAt desc"],
+  } as const;
+  try {
+    console.info("[sponsor-dashboard:getSponsorIdeas] Firestore query", details);
+    const ideas = await getSponsorIdeas(filters);
+    console.info("[sponsor-dashboard:getSponsorIdeas] Firestore query succeeded", {
+      ...details,
+      count: ideas.length,
+    });
+    return ideas;
+  } catch (error: unknown) {
+    logDashboardQueryError("getSponsorIdeas", details, error);
+    return [];
+  }
+}
+
+async function loadSupports(sponsorId: string): Promise<SponsorSupport[]> {
+  const details = {
+    collection: "sponsorSupports",
+    fields: ["sponsorId == currentUser.uid", "createdAt desc"],
+  } as const;
+  try {
+    console.info("[sponsor-dashboard:getSupports] Firestore query", details);
+    const supports = await getSupports(sponsorId);
+    console.info("[sponsor-dashboard:getSupports] Firestore query succeeded", {
+      ...details,
+      count: supports.length,
+    });
+    return supports;
+  } catch (error: unknown) {
+    logDashboardQueryError("getSupports", details, error);
+    return [];
+  }
+}
+
+async function loadSponsorshipOffers(
+  sponsorId: string,
+): Promise<SponsorOfferListItem[]> {
+  const details = {
+    collection: "supportRequests (+ ideas document reads)",
+    fields: ["supporterId == currentUser.uid"],
+  } as const;
+  try {
+    console.info(
+      "[sponsor-dashboard:getSponsorshipOffers] Firestore query",
+      details,
+    );
+    const offers = await getSponsorshipOffers(sponsorId);
+    console.info(
+      "[sponsor-dashboard:getSponsorshipOffers] Firestore query succeeded",
+      { ...details, count: offers.length },
+    );
+    return offers;
+  } catch (error: unknown) {
+    logDashboardQueryError("getSponsorshipOffers", details, error);
+    return [];
+  }
+}
+
 export async function getSponsorDashboard(
   filters: SponsorIdeaFilters = {},
 ): Promise<Result<SponsorDashboardData>> {
@@ -302,10 +398,10 @@ export async function getSponsorDashboard(
       : null;
     const [ideas, supports, offers] = await Promise.all([
       profile?.approvalStatus === "approved"
-        ? getSponsorIdeas(filters)
+        ? loadSponsorIdeas(filters)
         : Promise.resolve([]),
-      profile ? getSupports(userId) : Promise.resolve([]),
-      getSponsorshipOffers(userId),
+      profile ? loadSupports(userId) : Promise.resolve([]),
+      loadSponsorshipOffers(userId),
     ]);
     return {
       success: true,
