@@ -3,7 +3,7 @@ import Image from "next/image";
 import { useAuth } from "@/hooks/use-auth";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { CalendarDays, LogIn, Menu, MessageCircle, Target, UserPlus, X } from "lucide-react";
+import { CalendarDays, LogIn, Menu, MessageCircle,UserPlus, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { mainNavigation } from "@/config/navigation";
 import { siteConfig } from "@/config/site";
@@ -76,7 +76,7 @@ export function SiteHeader() {
       <PageContainer className="flex min-h-18 items-center gap-2 sm:gap-3">
         <Link
           href="/"
-          className="group flex min-w-0 shrink items-center gap-2.5 rounded-xl focus-visible:outline-blue-700"
+          className="group flex shrink-0 items-center gap-2.5 rounded-xl focus-visible:outline-blue-700"
         >
           
           <Image
@@ -85,7 +85,8 @@ export function SiteHeader() {
   width={40}
   height={40}
   priority
-  className="h-10 w-10 rounded-full object-cover"
+  unoptimized
+  className="h-10 w-10 shrink-0 rounded-full object-cover"
 />
           <span className="truncate text-base font-extrabold tracking-tight text-blue-900 sm:text-lg">
             {siteConfig.name}
